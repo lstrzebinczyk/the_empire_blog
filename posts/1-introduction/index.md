@@ -36,4 +36,4 @@ And not even that, Reikland for now.
 I, quite frankly, already implemented a little bit of it before I decided it's a blog-worthy material. The following several posts will be my attempt to present what I already have.
 I will try and explain my thought process and why I made certain decisions. Once that is documented, I'll move on to figuring out new things.
 
-The project is coded in [https://crystal-lang.org/](https://crystal-lang.org/). Onwards to [Humble beginning](posts/2-humble-beginning.md)
+The project is coded in [https://crystal-lang.org/](https://crystal-lang.org/). Onwards to [Humble beginning](posts/2-humble-beginning/index.md)!
