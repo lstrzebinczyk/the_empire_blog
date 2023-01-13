@@ -124,7 +124,7 @@ end
 
 And a quick trip to `crystal src/main.cr` gives us this:
 
-![Empty black screen](/the-empire-blog/assets/posts/2/empty_black_screen.png)
+![Empty black screen]({{site.url}}/assets/posts/2/empty_black_screen.png)
 
 Nice. Why is it black? [A tutorial page on drawing](https://oprypin.github.io/crsfml/tutorials/graphics/draw.html) contains an extension of the code we were supposed to write last time:
 
