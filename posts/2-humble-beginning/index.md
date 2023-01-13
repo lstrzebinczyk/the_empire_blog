@@ -124,7 +124,7 @@ end
 
 And a quick trip to `crystal src/main.cr` gives us this:
 
-![Empty black screen](the_empire_blog/assets/posts/2/empty_black_screen.png)
+![Empty black screen](the_empire_blog/docs/assets/posts/2/empty_black_screen.png)
 
 Nice. Why is it black? [A tutorial page on drawing](https://oprypin.github.io/crsfml/tutorials/graphics/draw.html) contains an extension of the code we were supposed to write last time:
 
@@ -173,6 +173,6 @@ end
 
 And that will give us
 
-![A white screen, and a black ball](/docs/assets/posts/2/nonempty_white_screen.png)
+![A white screen, and a black ball](/the_empire_blog/docs/assets/posts/2/nonempty_white_screen.png)
 
 We have successfully rendered something! That will be enough for today.
