@@ -81,7 +81,9 @@ Let's decompose this:
 
 That's very interesting! And very different to webdev, which I'm used to. I'll change `TheEmpire` to be a class like so:
 
-```
+```crystal
+# src/the_empire.cr
+
 require "crsfml"
 
 class TheEmpire
@@ -119,8 +121,56 @@ end
 ```
 
 And a quick trip to `crystal src/main.cr` gives us this:
-![Empty black screen](/the-empire-blog/assets/posts/2/empty_black_screen.png)
 
-Nice.
+![Empty black screen](/docs/assets/posts/2/empty_black_screen.png)
 
-Tomorrow I'll write something about basic rendering
+Nice. Why is it black? [A tutorial page on drawing](https://oprypin.github.io/crsfml/tutorials/graphics/draw.html) contains an extension of the code we were supposed to write last time:
+
+```crystal
+  # clear the window with black color
+  window.clear(SF::Color::Black)
+
+  # draw everything here...
+  window.draw(...)
+
+  # end the current frame
+  window.display
+```
+
+What I'll do, is I'll extend `TheEmpire` class with:
+
+```crystal
+# src/the_empire.cr, class TheEmpire
+
+def render
+  @window.clear(SF::Color::White)
+
+  shape = SF::CircleShape.new(300)
+  shape.fill_color = SF::Color::Black
+
+  @window.draw(shape)
+
+  @window.display
+end
+```
+
+and update the main loop to:
+
+```crystal
+# src/main.cr
+
+require "./the_empire"
+
+the_empire = TheEmpire.new
+
+while the_empire.running?
+  the_empire.handle_events
+  the_empire.render
+end
+```
+
+And that will give us
+
+![A white screen, and a black ball](/docs/assets/posts/2/nonempty_white_screen.png)
+
+We have successfully rendered something! That will be enough for today.
