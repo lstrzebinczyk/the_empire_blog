@@ -3,5 +3,7 @@
 My name is Łukasz Strzebińczyk. I am working on a side project, and I decided it's interesting enough to share.
 Hope you enjoy it.
 
-- [Introduction](posts/1-introduction/index.md)
-- [Humble beginning](posts/2-humble-beginning/index.md)
+1. [Introduction](posts/1-introduction)
+1. [Humble beginning](posts/2-humble-beginning)
+1. [Handling events](posts/3-handling-events)
+1. [Initial UI](posts/3-initial-ui)

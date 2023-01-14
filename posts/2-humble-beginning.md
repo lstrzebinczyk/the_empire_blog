@@ -175,4 +175,4 @@ And that will give us
 
 ![A white screen, and a black ball](/the_empire_blog/docs/assets/posts/2/nonempty_white_screen.png)
 
-We have successfully rendered something! That will be enough for today.
+We have successfully rendered something! That will be enough for today. In the next one, we will be [handling events](3-handling-events.html)!
