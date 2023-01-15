@@ -1,3 +1,5 @@
+## What do I actually want?
+
 At this point I am quite confident I have all of the tools to do what I want. So let's explore a little bit what that is.
 
 When I say, that I want to simulate the economy, what I mean is: I want to define where specific goods are created, where these goods are required and used, and I want to see how they would travel, from the place of their creation, to where they are used. Since we are talking about Warhammer, the easiest and earliest example could be: wheat, cheese or rye are created at farms, but there is a market for all of these goods in cities. So a merchant would try and buy them cheaply at farms and transport them to the cities. Or maybe the farms would be taxed.
@@ -15,6 +17,8 @@ Pardon my poor drawing skills, but this is more or less how I'm imagining the fi
 ![a mockup](/the_empire_blog/docs/assets/posts/4/mockup.png)
 
 So without further adue, let's do it!
+
+## Divide the UI into 3 parts
 
 These should give us some sort of a starting point:
 ```crystal
@@ -84,7 +88,6 @@ For now, we just save `@position` and `@size`, and render a red rectangle where 
 To finish this part, we need to update the top of `src/the_empire.cr` to:
 
 ```crystal
-
 require "crsfml"
 require "./the_empire/**"
 ```
@@ -128,6 +131,8 @@ end
 Then require it on top of `src/the_empire.cr`, and use `Constants::COLOR::MENU::BACKGROUND` in `RightMenu` and `BottomMenu`, and white in `WorldMap`. Voila:
 
 ![a very grey UI](/the_empire_blog/docs/assets/posts/4/grey_ui.png)
+
+## Bring back the @shape!
 
 So what do we do with the `@shape` ? It belongs in the `WorldMap`, as it's a stand-in for the content we'll be drawing. I will be moving `@shape` and handling of all events that update it's state to `WorldMap`:
 
@@ -299,11 +304,15 @@ class TheEmpire
 end
 ```
 
-And now we have a clearly defined canvas:
+Our big black ball is back in the game:
 
 <video width="100%" src="/the_empire_blog/docs/assets/posts/4/ui_shape_with_canvas.mp4" controls autoplay></video>
 
-Final thing I want to do at this stage is to make bounding rectangles a first-class citizen. Let's check the code again:
+Final thing I want to do at this stage is to ...
+
+## Make bounding rectangles a first-class citizen
+
+Let's check the code again:
 
 ```crystal
 class TheEmpire
@@ -324,7 +333,7 @@ class TheEmpire
 end
 ```
 
-Notice we are saving `@position` and `@size` as separate instance variables, and then using them to set the `background` for rendering. But they are representative of a single value: the bounding rectangle. So I would like this code to look like this instead:
+Notice we are saving `@position` and `@size` as separate instance variables, and then using them to set the `background` for rendering. We deal with 2 separate variables, which represent a single concept, the bounding rectangle. I would like this code to look like this instead:
 
 ```crystal
 class TheEmpire
@@ -345,7 +354,7 @@ class TheEmpire
 end
 ```
 
-I want to save the rectangle in instance variable, and use it to create the background. But that raises an error:
+This representation is closer to my mental model of the app. That raises an error, though:
 
 ```bash
 In src/the_empire/bottom_menu.cr:10:39
@@ -379,7 +388,7 @@ end
 Ok, maybe not *that* easy. I don't fully understand what's happening here, but I found the implementation of the already-existing initializer and tweaked it a little bit. I created a `/lib` directory, which I'll use to store tools and extensions to tools, require it in `src/the_empire.cr`, and voila:
 
 ```crystal
-killa@killa-MS-7A34:~/workspace/the_empire_redone/the_empire$ crystal src/main.cr
+killa@killa-MS-7A34:~/workspace/the_empire$ crystal src/main.cr
 Showing last frame. Use --error-trace for full trace.
 
 In src/lib/sf/rectangle_shape.cr:5:43

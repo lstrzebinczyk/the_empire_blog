@@ -1,4 +1,6 @@
-Well, all great adventures begin with `~rails new~` `crystal init`! So let's see:
+## Getting Started
+
+Well, all great adventures start with <del>`rails new`</del> `crystal init`! So let me see:
 
 ```bash
   killa@killa-MS-7A34:~/workspace$ crystal init app the_empire
@@ -13,9 +15,7 @@ Well, all great adventures begin with `~rails new~` `crystal init`! So let's see
   Initialized empty Git repository in /home/killa/workspace/the_empire/.git/
 ```
 
-hooray!
-
-So, what we have is
+hooray! What I am mainly interested in in is this:
 
 ```crystal
 # src/the_empire.cr
@@ -31,7 +31,7 @@ end
 Since it needs to be a visual app, I chose to use [CrSFML](https://oprypin.github.io/crsfml/). It seems to give me what I'm going to need.
 Adding to `shards.yml`:
 
-```
+```yaml
 dependencies:
   crsfml:
     github: oprypin/crsfml
@@ -49,9 +49,7 @@ Postinstall of crsfml: make
 Writing shard.lock
 ```
 
-So far, so good.
-
-[Tutorial](https://oprypin.github.io/crsfml/tutorials/window/window.html) gives us this:
+So far, so good. For my initial code, [tutorial](https://oprypin.github.io/crsfml/tutorials/window/window.html) gives suggests this:
 
 ```crystal
 require "crsfml"
@@ -70,7 +68,7 @@ while window.open?
 end
 ```
 
-Let's decompose this:
+Let me analyze it:
 - I need to create an instance of `SF::RenderWindow`
 - I need to create an infinite loop, running while that window is `#open?`
 - in my infinite loop, I need to poll events from that window
@@ -117,6 +115,20 @@ class TheEmpire
 end
 ```
 
+I'll also introduce a startup file like so:
+
+```crystal
+# src/main.cr
+
+require "./the_empire"
+
+the_empire = TheEmpire.new
+
+while the_empire.running?
+  the_empire.handle_events
+end
+```
+
 And a quick trip to `crystal src/main.cr` gives us this:
 
 ![Empty black screen](/the_empire_blog/docs/assets/posts/2/empty_black_screen.png)
@@ -124,17 +136,17 @@ And a quick trip to `crystal src/main.cr` gives us this:
 Nice. Why is it black? [A tutorial page on drawing](https://oprypin.github.io/crsfml/tutorials/graphics/draw.html) contains an extension of the code we were supposed to write last time:
 
 ```crystal
-  # clear the window with black color
-  window.clear(SF::Color::Black)
+# clear the window with black color
+window.clear(SF::Color::Black)
 
-  # draw everything here...
-  window.draw(...)
+# draw everything here...
+window.draw(...)
 
-  # end the current frame
-  window.display
+# end the current frame
+window.display
 ```
 
-What I'll do, is I'll extend `TheEmpire` class with:
+So I am going to do exactly that. And a circle, for good measure:
 
 ```crystal
 # src/the_empire.cr, class TheEmpire
@@ -151,7 +163,7 @@ def render
 end
 ```
 
-and update the main loop to:
+Main loop needs to be updated as well:
 
 ```crystal
 # src/main.cr

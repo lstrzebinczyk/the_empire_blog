@@ -28,6 +28,8 @@ class TheEmpire
 end
 ```
 
+## Moving around with AWSD
+
 Since we already have the system of handling events, we just need to handle them:
 
 ```crystal
@@ -43,7 +45,9 @@ def handle_event(event : SF::Event::KeyPressed)
 end
 ```
 
-If a `SF::Event::KeyPressed` event is received, for the key codes of A, W, S and D, `@shape.move` around. Let's see:
+If a `SF::Event::KeyPressed` event is received, for the key codes of A, W, S and D, `@shape.move` around.
+How do I know that this is the right combination of arguments as a response to each of AWSD keys? I tried a different way, it didn't work like expected,
+and I just fiddled with it until it was right, of course. Let's see:
 
 <video width="100%" src="/the_empire_blog/docs/assets/posts/3/janky_moves.mp4" controls autoplay></video>
 
@@ -51,7 +55,7 @@ Well, that works, but holy smokes, it's SO JANKY... Looking more carefully at th
 
 > Sometimes, people try to react to KeyPressed events directly to implement smooth movement. Doing so will not produce the expected effect, because when you hold a key you only get a few events (remember, the repeat delay). To achieve smooth movement with events, you must use a boolean that you set on KeyPressed and clear on KeyReleased; you can then move (independently of events) as long as the boolean is set.
 
-Allrighty then, let's define the additional values:
+The doc could be a little less passive-agresive about it, but ok. In that case, let's follow it's suggestion and define the additional values:
 
 ```crystal
 # src/the_empire.cr, class TheEmpire
@@ -59,7 +63,7 @@ Allrighty then, let's define the additional values:
 property moving_up_speed = 0, moving_left_speed = 0
 ```
 
-And we're gonna have to update howwe deal with `SF::Event::KeyPressed`:
+I did ints instead of booleans, because that will allow us to encode all 4 directions with 2 variables. How we react to `SF::Event::KeyPressed` also needs to change, plus we need `SF::Event::KeyReleased`:
 
 ```crystal
 # src/the_empire.cr, class TheEmpire
@@ -72,12 +76,6 @@ def handle_event(event : SF::Event::KeyPressed)
   when SF::Keyboard::Key::D then self.moving_left_speed = MOVING_SPEED
   end
 end
-```
-
-This will set the status as moving in the given direction, when we press a key. Now, to stop the movement once we release:
-
-```crystal
-# src/the_empire.cr, class TheEmpire
 
 def handle_event(event : SF::Event::KeyReleased)
   case event.code
@@ -89,7 +87,8 @@ def handle_event(event : SF::Event::KeyReleased)
 end
 ```
 
-This, by itself, doesn't do anything. We need to introduce additional element into the main loop: updating;
+If we press `AWSD`, we are now moving in the respective direction, and once we release, we are no longer moving.
+This, by itself, doesn't do anything quite yet. We need to introduce additional element into the main loop: updating;
 
 ```crystal
 # src/main.cr
@@ -126,6 +125,8 @@ Et voila:
 <video width="100%" src="/the_empire_blog/docs/assets/posts/3/smooth_moves.mp4" controls autoplay></video>
 
 I am aware it doesn't immedietely look all that better, but that is because of poor quality of the recorded clip. In actual app, it's silky smooth.
+
+## Moving around with mouse
 
 Second thing I want to do is to drag and drop the ball. There are 3 events, which I'm interested in for this: `SF::Event::MouseButtonPressed`, `SF::Event::MouseButtonReleased` and `SF::Event::MouseMoved`.
 This will happen in 3 stages:
@@ -165,7 +166,11 @@ Which gives us this beauty:
 
 <video width="100%" src="/the_empire_blog/docs/assets/posts/3/drag_and_drop.mp4" controls autoplay></video>
 
-This leaves us with zooming:
+This leaves us with...
+
+## Zooming
+
+This one is fairly easy:
 
 ```crystal
 # src/the_empire.cr, class TheEmpire
@@ -189,6 +194,8 @@ This way, if we scroll up, scrolling down will set us back on the value we were 
 Easy enough:
 
 <video width="100%" src="/the_empire_blog/docs/assets/posts/3/scaling.mp4" controls autoplay></video>
+
+## Final code
 
 And there it is. We can now move our black ball around and zoom it. In full, the code is currently like this:
 
