@@ -1,8 +1,3 @@
----
-title: "Humble beginning"
-date: 2019-01-20
----
-
 Well, all great adventures begin with `~rails new~` `crystal init`! So let's see:
 
 ```bash

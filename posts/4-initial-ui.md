@@ -1,0 +1,116 @@
+At this point I am quite confident I have all of the tools to do what I want. So let's explore a little bit what that is.
+
+When I say, that I want to simulate the economy, what I mean is: I want to define where specific goods are created, where these goods are required and used, and I want to see how they would travel, from the place of their creation, to where they are used. Since we are talking about Warhammer, the easiest and earliest example could be: wheat, cheese or rye are created at farms, but there is a market for all of these goods in cities. So a merchant would try and buy them cheaply at farms and transport them to the cities. Or maybe the farms would be taxed.
+I would love to simulate this per-person, but for now we are aiming at simulating per city (or a town, or a farm).
+
+So, when I say, I want to draw a map, I mean: I want to define where are the cities (or towns, or farms), and what are the connections between them. I want to define a graph.
+Having that said, I imagine this application (well, at least that initial part) to be a mix between a Paint and a CMS.
+
+Main part of the ui will be the canvas. An area, on which the drawing happens. Adding new content will happen by clicking on it, and it will be possible to move it around. It should be called `WorldMap`.
+Second part of the ui will be the toolbox. As a paint program has different tools to interact with the canvas in various ways, so will be the case here. The tools will be called "modes", as in "modes of operation", they toolbox will be placed below the map, and will be descriptively called `BottomMenu`.
+Third part will be on the right of both `WorldMap` and `BottomMenu`, and will be called, of course, `RightMenu`. This is where the details of the currently ongoing work will be placed. In the initial part, this is where the forms will be.
+
+Pardon my poor drawing skills, but this is more or less how I'm imagining the first version to look like:
+
+![a mockup](/the_empire_blog/docs/assets/posts/4/mockup.png)
+
+So without further adue, let's do it!
+
+These should give us some sort of a starting point:
+```crystal
+# src/the_empire, class TheEmpire
+
+RIGHT_MENU_WIDTH = 400
+BOTTOM_MENU_HEIGHT = 120
+```
+
+And, we're going to need something like this:
+
+```crystal
+# src/the_empire, class TheEmpire#initialize
+
+@world_map = TheEmpire::WorldMap.new(
+  position: {0, 0},
+  size: {@window_width - RIGHT_MENU_WIDTH, @window_height - BOTTOM_MENU_HEIGHT}
+)
+
+@bottom_menu = TheEmpire::BottomMenu.new(
+  position: {0, @window_height - BOTTOM_MENU_HEIGHT},
+  size: {@window_width - RIGHT_MENU_WIDTH, BOTTOM_MENU_HEIGHT}
+)
+
+@right_menu = TheEmpire::RightMenu.new(
+  position: {@window_width - RIGHT_MENU_WIDTH, 0},
+  size: {RIGHT_MENU_WIDTH, @window_height}
+)
+```
+
+So it turns our, when working on that app, I need to think a lot about screen real estate. Much more so than when working on a web application, because there, browser solves a lot of problems for me. Main tool to think about where things are placed on a screen is what I came to think of as "bounding rectangle".
+Bounding rectangle is a rectangle on a screen. It is defined by 4 numbers: 2 numbers indicating where it's top-left corner is, and 2 numbers indicating it's width and height.
+
+This is exactly what `position` and `size` indicate in the code above. And, since I am a mathematician by education, one more thing that's been surprising for me is this:
+point 0, 0 is in top left corner in the screen, the x value increases as we go right, and y value increases as we go down. In pure math, that is handled a bit differentely.
+
+So, the `WorldMap` begins in the top, left corner, and extends all the way to right, ending `RIGHT_MENU_WIDTH` pixels before the right corner, and all the way down, finishing `BOTTOM_MENU_HEIGHT` pixels before the bottom.
+`BottomMenu` begins glued to the left screen border, but beginning on top where `WorldMap` ends, and extending to the right in the same way `WorldMap` does.
+Finally, `RightMenu` takes the remaining screen size on the right.
+
+Let's see what we need to implement these classess:
+
+```crystal
+# src/the_empire/world_map.cr
+
+class TheEmpire
+  class WorldMap
+    include SF::Drawable
+
+    def initialize(@position : Tuple(Int32, Int32), @size : Tuple(Int32, Int32))
+    end
+
+    def draw(target : SF::RenderTarget, states : SF::RenderStates)
+      background = SF::RectangleShape.new(@size)
+      background.position = @position
+      background.fill_color = SF::Color.new(20, 208, 240)
+
+      target.draw(background, states)
+    end
+  end
+end
+```
+
+[DF::Drawable](https://oprypin.github.io/crsfml/api/SF/Drawable.html) comes from `CrSFML` directly and is used to make rendering easier.
+For now, we just save `@position` and `@size`, and render a red rectangle where the bounding rectangle is. Implementation for `BottomMenu` and `RightMenu` are identical, except I made them different colors.
+
+To finish this part, we need to update the top of `src/the_empire.cr` to:
+
+```crystal
+
+require "crsfml"
+require "./the_empire/**"
+```
+
+And I have to say, I really love it. The second line here allows us to recursively require an entire directory. Ruby doesn't have that, and it's awesome.
+
+Finally, we need to update the rendering code:
+
+```crystal
+# src/the_empire, class TheEmpire
+
+def render
+  @window.clear(SF::Color::White)
+
+  @window.draw(@world_map)
+  @window.draw(@bottom_menu)
+  @window.draw(@right_menu)
+
+  @window.display
+end
+```
+
+We'll leave the `@shape` out of this for now.
+And that gives us this:
+
+![a very bright UI shape](/the_empire_blog/docs/assets/posts/4/basic_shape.png)
+
+We have the structure that we want! I initially made the colors red, green and blue, but that really hurt my eyes after looking at it shortly, so for presentation I picked more "soft" colors : ).
+

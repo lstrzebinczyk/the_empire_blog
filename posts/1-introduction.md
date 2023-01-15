@@ -1,8 +1,3 @@
----
-title: "Introduction"
-date: 2023-01-12
----
-
 I am a [warhammer fantasy](https://pl.wikipedia.org/wiki/Warhammer_Fantasy) nerd.
 In my early teenage years, a good friend introduced me to WFRP, 1st edition. We spend next to every weekend playing, and I still fondly remember my characters. Still have them in my binder.
 

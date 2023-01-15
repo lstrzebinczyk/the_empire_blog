@@ -1,8 +1,3 @@
----
-title: "Handling events"
-date: 2019-01-20
----
-
 Let's try and move that circle around a little bit. We want to:
 - use the AWSD to move it around
 - drag and drop it with mouse
