@@ -302,3 +302,120 @@ end
 And now we have a clearly defined canvas:
 
 <video width="100%" src="/the_empire_blog/docs/assets/posts/4/ui_shape_with_canvas.mp4" controls autoplay></video>
+
+Final thing I want to do at this stage is to make bounding rectangles a first-class citizen. Let's check the code again:
+
+```crystal
+class TheEmpire
+  class RightMenu
+    include SF::Drawable
+
+    def initialize(@position : Tuple(Int32, Int32), @size : Tuple(Int32, Int32))
+    end
+
+    def draw(target : SF::RenderTarget, states : SF::RenderStates)
+      background = SF::RectangleShape.new(@size)
+      background.position = @position
+      background.fill_color = Constants::COLOR::MENU::BACKGROUND
+
+      target.draw(background, states)
+    end
+  end
+end
+```
+
+Notice we are saving `@position` and `@size` as separate instance variables, and then using them to set the `background` for rendering. But they are representative of a single value: the bounding rectangle. So I would like this code to look like this instead:
+
+```crystal
+class TheEmpire
+  class RightMenu
+    include SF::Drawable
+
+    def initialize(position, size)
+      @bounding_rectangle = SF::IntRect.new(position[0], position[1], size[0], size[1])
+    end
+
+    def draw(target : SF::RenderTarget, states : SF::RenderStates)
+      background = SF::RectangleShape.new(@bounding_rectangle)
+      background.fill_color = Constants::COLOR::MENU::BACKGROUND
+
+      target.draw(background, states)
+    end
+  end
+end
+```
+
+I want to save the rectangle in instance variable, and use it to create the background. But that raises an error:
+
+```bash
+In src/the_empire/bottom_menu.cr:10:39
+
+ 10 | background = SF::RectangleShape.new(@bounding_rectangle)
+                                      ^--
+Error: no overload matches 'SF::RectangleShape.new' with type SF::Rect(Int32)
+
+Overloads are:
+ - SF::RectangleShape.new(size : Vector2 | Tuple = Vector2.new(0, 0))
+ - SF::RectangleShape.new(copy : RectangleShape)
+```
+
+There is no such initializer for `SF::RectangleShape`. Well, easy, I'll just add one:
+
+```crystal
+# src/lib/sf/rectangle_shape.cr
+
+class SF::RectangleShape
+  # https://github.com/oprypin/crsfml/blob/master/src/graphics/obj.cr#L3962-L3965
+  def initialize(bounding_rectangle : SF::IntRect)
+    SFMLExt.sfml_rectangleshape_allocate(out @this)
+    size = SF.vector2f(bounding_rectangle.size[0], bounding_rectangle.size[1])
+    SFMLExt.sfml_rectangleshape_initialize_UU2(to_unsafe, size)
+
+    self.position = bounding_rectangle.position
+  end
+end
+```
+
+Ok, maybe not *that* easy. I don't fully understand what's happening here, but I found the implementation of the already-existing initializer and tweaked it a little bit. I created a `/lib` directory, which I'll use to store tools and extensions to tools, require it in `src/the_empire.cr`, and voila:
+
+```crystal
+killa@killa-MS-7A34:~/workspace/the_empire_redone/the_empire$ crystal src/main.cr
+Showing last frame. Use --error-trace for full trace.
+
+In src/lib/sf/rectangle_shape.cr:5:43
+
+ 5 | size = SF.vector2f(bounding_rectangle.size[0], bounding_rectangle.size[1])
+                                           ^---
+Error: undefined method 'size' for SF::Rect(Int32)
+```
+
+`SF::Rect` doesn't have `#size`. Well, let's add that one as well:
+
+```crystal
+# src/lib/sf/rect.cr
+
+struct SF::Rect
+  def position
+    {@left, @top}
+  end
+
+  def position=(new_position)
+    @left = new_position[0]
+    @top = new_position[1]
+  end
+
+  def size
+    {@width, @height}
+  end
+
+  def size=(new_size)
+    @width = new_size[0]
+    @height = new_size[1]
+  end
+end
+```
+
+And that does the trick just fine! I updated the `WorldMap` and both menus to use it, and we're done for this one.
+
+In the next post, we will discover what happens when we try to [render more shapes](5-rendering-more-shapes.html)!
+

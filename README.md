@@ -7,3 +7,4 @@ Hope you enjoy it.
 1. [Humble beginning](posts/2-humble-beginning)
 1. [Handling events](posts/3-handling-events)
 1. [Initial UI](posts/4-initial-ui)
+1. [Rendering more shapes](posts/5-rendering-more-shapes)
