@@ -114,3 +114,191 @@ And that gives us this:
 
 We have the structure that we want! I initially made the colors red, green and blue, but that really hurt my eyes after looking at it shortly, so for presentation I picked more "soft" colors : ).
 
+Since I am not a UI designer, nor have any skills for it, for my actual UI, I copy-pasted colors from Factorio:
+
+```crystal
+# src/constants.cr
+
+module Constants
+  COLOR::MENU::BACKGROUND = SF::Color.new(96, 96, 96)
+  COLOR::MENU::BACKGROUND_BORDER = SF::Color.new(227, 227, 227)
+end
+```
+
+Then require it on top of `src/the_empire.cr`, and use `Constants::COLOR::MENU::BACKGROUND` in `RightMenu` and `BottomMenu`, and white in `WorldMap`. Voila:
+
+![a very grey UI](/the_empire_blog/docs/assets/posts/4/grey_ui.png)
+
+So what do we do with the `@shape` ? It belongs in the `WorldMap`, as it's a stand-in for the content we'll be drawing. I will be moving `@shape` and handling of all events that update it's state to `WorldMap`:
+
+```crystal
+# src/the_empire.cr
+
+require "crsfml"
+
+require "./constants"
+require "./the_empire/**"
+
+class TheEmpire
+  RIGHT_MENU_WIDTH = 400
+  BOTTOM_MENU_HEIGHT = 120
+
+  def initialize
+    @window_width = 1920
+    @window_height = 1080
+
+    @window = SF::RenderWindow.new(SF::VideoMode.new(@window_width, @window_height), "My window")
+    # If I don't do that, it actually renders ~20000 FPS, lol
+    @window.framerate_limit = 60
+    # I have 3 screens, and if I don't set it, it renders in my left-most screen.
+    # I would appreciate the option to define main screen, actually.
+    @window.position = SF.vector2(6500, 1800)
+
+    @world_map = TheEmpire::WorldMap.new(
+      position: {0, 0},
+      size: {@window_width - RIGHT_MENU_WIDTH, @window_height - BOTTOM_MENU_HEIGHT}
+    )
+
+    @bottom_menu = TheEmpire::BottomMenu.new(
+      position: {0, @window_height - BOTTOM_MENU_HEIGHT},
+      size: {@window_width - RIGHT_MENU_WIDTH, BOTTOM_MENU_HEIGHT}
+    )
+
+    @right_menu = TheEmpire::RightMenu.new(
+      position: {@window_width - RIGHT_MENU_WIDTH, 0},
+      size: {RIGHT_MENU_WIDTH, @window_height}
+    )
+  end
+
+  def running?
+    @window.open?
+  end
+
+  def handle_events
+    while event = @window.poll_event
+      handle_event(event)
+      @world_map.handle_event(event)
+    end
+  end
+
+  # Handle the close event specifically
+  def handle_event(event : SF::Event::Closed)
+    @window.close
+  end
+
+  # Ignore any other event
+  def handle_event(event)
+  end
+
+  def update
+    @world_map.update
+  end
+
+  def render
+    @window.clear(SF::Color::White)
+
+    @window.draw(@world_map)
+    @window.draw(@bottom_menu)
+    @window.draw(@right_menu)
+
+    @window.display
+  end
+end
+```
+
+```crystal
+# src/the_empire/world_map.cr
+
+class TheEmpire
+  class WorldMap
+    include SF::Drawable
+
+    MOVING_SPEED = 10
+
+    property moving_up_speed = 0, moving_left_speed = 0
+
+    def initialize(@position : Tuple(Int32, Int32), @size : Tuple(Int32, Int32))
+      @shape = SF::CircleShape.new(300)
+      @shape.fill_color = SF::Color::Black
+
+      @moving_around = false
+      @mouse_button_initial_x = 0
+      @mouse_button_initial_y = 0
+    end
+
+    def handle_event(event : SF::Event::KeyPressed)
+      case event.code
+      when SF::Keyboard::Key::W then self.moving_up_speed = -MOVING_SPEED
+      when SF::Keyboard::Key::S then self.moving_up_speed = MOVING_SPEED
+      when SF::Keyboard::Key::A then self.moving_left_speed = -MOVING_SPEED
+      when SF::Keyboard::Key::D then self.moving_left_speed = MOVING_SPEED
+      end
+    end
+
+    def handle_event(event : SF::Event::KeyReleased)
+      case event.code
+      when SF::Keyboard::Key::W then self.moving_up_speed = 0
+      when SF::Keyboard::Key::S then self.moving_up_speed = 0
+      when SF::Keyboard::Key::A then self.moving_left_speed = 0
+      when SF::Keyboard::Key::D then self.moving_left_speed = 0
+      end
+    end
+
+    def handle_event(event : SF::Event::MouseButtonPressed)
+      @moving_around = true
+      @mouse_button_initial_x = event.x
+      @mouse_button_initial_y = event.y
+    end
+
+    def handle_event(event : SF::Event::MouseButtonReleased)
+      @moving_around = false
+    end
+
+    def handle_event(event : SF::Event::MouseMoved)
+      if @moving_around
+        x_delta = event.x - @mouse_button_initial_x
+        y_delta = event.y - @mouse_button_initial_y
+
+        move({x_delta, y_delta})
+
+        @mouse_button_initial_x = event.x
+        @mouse_button_initial_y = event.y
+      end
+    end
+
+    def handle_event(event : SF::Event::MouseWheelMoved)
+      if event.delta > 0
+        scale(1.25)
+      else
+        scale(0.8)
+      end
+    end
+
+    # Ignore any other event
+    def handle_event(event)
+    end
+
+    def update
+      if moving_up_speed != 0 || moving_left_speed != 0
+        move({moving_left_speed, moving_up_speed})
+      end
+    end
+
+    def move(vector)
+      @shape.move(vector)
+    end
+
+    def scale(factor)
+      @shape.scale(factor, factor)
+    end
+
+    def draw(target : SF::RenderTarget, states : SF::RenderStates)
+      target.draw(@shape, states)
+    end
+  end
+end
+```
+
+And now we have a clearly defined canvas:
+
+<video width="100%" src="/the_empire_blog/docs/assets/posts/4/ui_shape_with_canvas.mp4" controls autoplay></video>
