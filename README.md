@@ -8,3 +8,4 @@ Hope you enjoy it.
 1. [Handling events](posts/3-handling-events)
 1. [Initial UI](posts/4-initial-ui)
 1. [Rendering more shapes](posts/5-rendering-more-shapes)
+1. [Implementing a button](posts/6-implementing-a-button)
