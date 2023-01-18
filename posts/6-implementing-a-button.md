@@ -4,7 +4,7 @@ But for now...
 
 ## A font
 
-(The docs)[https://oprypin.github.io/crsfml/api/SF/Text.html] tell us, that in order to render any text, we need to begin by having a font. I'll fetch (titilium web)[https://fonts.google.com/specimen/Titillium+Web], put it into `./assets/fonts/titilium`, and update the constants like so:
+[The docs](https://oprypin.github.io/crsfml/api/SF/Text.html) tell us, that in order to render any text, we need to begin by having a font. I'll fetch [titilium web](https://fonts.google.com/specimen/Titillium+Web), put it into `./assets/fonts/titilium`, and update the constants like so:
 
 ```crystal
 # src/constants.cr
@@ -17,7 +17,7 @@ module Constants
 end
 ```
 
-And move on.
+And we have a font now. Let's move on to...
 
 ## Implementing a button
 
@@ -48,16 +48,16 @@ module UI
     end
 
     def draw(target : SF::RenderTarget, states : SF::RenderStates)
-      # We define a grey rectangle to be rendered at @bounding_rectangle
+      # Define a grey rectangle to be rendered at @bounding_rectangle
       background = SF::RectangleShape.new(@bounding_rectangle)
       background.fill_color = SF::Color.new(142, 142, 142)
 
-      # we define a text object
+      # Define a text object. We needed to have a font object first, because it's needed here
       text = SF::Text.new(@text, Constants::FONT, 60)
       text.color = SF::Color::Black
       text.position = @bounding_rectangle.position
 
-      # and render them both
+      # Render both
       target.draw(background, states)
       target.draw(text, states)
     end
@@ -65,7 +65,7 @@ module UI
 end
 ```
 
-And let's create one in the bottom menu:
+We're going to make a good use of it in the bottom menu:
 
 ```crystal
 # src/the_empire/bottom_menu.cr
@@ -100,7 +100,7 @@ And there we have it:
 
 ![A button](/the_empire_blog/docs/assets/posts/6/button.png)
 
-That's a button, allright. It needs several improvements:
+That's a button, allright. Mission accomplished. It needs several improvements, though:
 - It should be vertically centered, and should have a padding on the left
 - the text should be centered
 - it needs to respond to being clicked
@@ -108,7 +108,7 @@ That's a button, allright. It needs several improvements:
 ## Centering the button inside the container
 
 The first part we can cheat for now. The bottom menu has 120px of height, and the button has 80px of height.
-If we render it 20px to the right and to the bottom, it should have a nice visual placement. I'll just update the button definition to this:
+If we render it 20px to the right and to the bottom, from it's current position, that should be just fine. I'll just update the button definition to this:
 
 ```crystal
 # src/the_empire/bottom_menu.cr, class TheEmpire::BottomMenu#draw
@@ -125,13 +125,16 @@ Which gives us this:
 
 ![A centered button](/the_empire_blog/docs/assets/posts/6/button_centered.png)
 
-Nice and centered. We have successfully avoided the necessity to think.
+Nice and centered. We have successfully avoided the necessity to think (about that specific problem, for now).
 
 ## Centering text inside button
 
 That part, we actually need to think through a little bit. We'll be adding a lot of different buttons, and they will be allowed to have different sizes, font sizes, and have different texts. For all of them, the text should be both vertically and horizontally centered.
-Text is basically a rectangle, so to center one within the other should really be fairly simple.
-If we take the position, of the `background`, and add to it the half of the width of the `background`, we should get the middle of the button. If we then substract half of the length of the `text`, that should give us the expected position for the text. Analogous solution for height should workas well. Ok, easy math, in and out:
+Since text is basically a rectangle, center one within the bounding rectangle should totally, really be fairly simple.
+
+If we take the `background` `left` position, and add half of the `background` width, we should get the middle of the buttons `x` position. If we then substract half of the `text` width, that should give us the expected `x` position. Analogous solution for height should workas well.
+
+That's easy math, 20 minutes adventure, in and out:
 
 ```crystal
 # src/lib/ui/button.cr, class UI::Button
@@ -142,8 +145,8 @@ def draw(target : SF::RenderTarget, states : SF::RenderStates)
 
   text = SF::Text.new(@text, Constants::FONT, 60)
   text.color = SF::Color::Black
-  text_position_x = (@bounding_rectangle.left + @bounding_rectangle.width / 2 - text.local_bounds.width / 2).to_i
-  text_position_y = (@bounding_rectangle.top + @bounding_rectangle.height / 2 - text.local_bounds.height / 2).to_i
+  text_position_x = @bounding_rectangle.left + @bounding_rectangle.width / 2 - text.local_bounds.width / 2
+  text_position_y = @bounding_rectangle.top + @bounding_rectangle.height / 2 - text.local_bounds.height / 2
   text.position = { text_position_x, text_position_y }
 
   target.draw(background, states)
@@ -151,11 +154,18 @@ def draw(target : SF::RenderTarget, states : SF::RenderStates)
 end
 ```
 
-![not centered button at all](/the_empire_blog/docs/assets/posts/6/button_not_centered.png)
+And that should do just fine! Let's see:
 
-This is not centered at all, and I already regret reliving this experience. It's a very interesting experience, rediscovering bugs that I already fixed weeks ago.
-The text in here is not rendered inside the expected position at all, and that's expected behavior. Turns out managing text on a screen is **really** difficult, and people way smarter than me picked the default behavior in here.
-To do what we want, we need to make use of all the texts local bounds:
+![not centered button at all](/the_empire_blog/docs/assets/posts/6/button_not_centered_at_all.png)
+
+This is not centered at all.
+
+Like I mentioned in the beginning, I am re-creating my steps from a while back with these posts, and that specific issue gives me painful flashbacks. It's a very interesting experience, rediscovering bugs that I already fixed weeks ago. Ones I was hoping never to see again. But well, here we are: We are asking the text to be rendered within a very specific bounding rectangle, and it is instead being rendered quite a good bit off.
+
+I have spent good, long, painful hours trying to understand that bit, but it turns out to be the expected behavior. Managing text on a screen is **really** difficult, and people way smarter than me decided that's a good default behavior.
+I have later learned that those people were right, but we'll get there in due time.
+
+Long story short, to do what we want, we need to not only use texts `width` and `height`, but also `top` and `left`. Texts bounds are nice enough to tell us exactly how much they are off:
 
 ```crystal
 # src/lib/ui/button.cr, class UI::Button
@@ -175,12 +185,13 @@ def draw(target : SF::RenderTarget, states : SF::RenderStates)
 end
 ```
 
-It took me long, long hours to understand that behavior, which is especially tricky since it's not explained at all in the [CrSGML Text doc](https://oprypin.github.io/crsfml/api/SF/Text.html),
-and I only learned what's happening here and why after reading [a random forum thread](https://en.sfml-dev.org/forums/index.php?topic=24026.0).
-Anyway, that works:
+Figuring this one out was especially tricky since it's not explained at all in the [CrSGML Text doc](https://oprypin.github.io/crsfml/api/SF/Text.html),
+and I only learned what's happening, and why it is happening after reading [a random forum thread](https://en.sfml-dev.org/forums/index.php?topic=24026.0).
+
+Anyway, that works like expected:
 
 ![proper button](/the_empire_blog/docs/assets/posts/6/button_proper.png)
 
-And that takes us to the really tricky part.
+And that takes us to the really tricky part. Making that button react to clicks will require us to think a little bit about [events management](7-events-management.html)!
 
-## Events management
+Allons-y!

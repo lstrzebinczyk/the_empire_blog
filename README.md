@@ -9,3 +9,4 @@ Hope you enjoy it.
 1. [Initial UI](posts/4-initial-ui)
 1. [Rendering more shapes](posts/5-rendering-more-shapes)
 1. [Implementing a button](posts/6-implementing-a-button)
+1. [Events management](posts/7-events-management)
