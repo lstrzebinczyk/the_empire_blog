@@ -10,4 +10,4 @@ Hope you enjoy it.
 1. [Rendering more shapes](posts/5-rendering-more-shapes)
 1. [Implementing a button](posts/6-implementing-a-button)
 1. [Events management](posts/7-events-management)
-1. [Modes of operation](posts/8-modes-of-operation.html)!
+1. [Modes of operation](posts/8-modes-of-operation.html)
