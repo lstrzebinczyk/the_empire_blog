@@ -11,3 +11,4 @@ Hope you enjoy it.
 1. [Implementing a button](posts/6-implementing-a-button)
 1. [Events management](posts/7-events-management)
 1. [Modes of operation](posts/8-modes-of-operation.html)
+1. [Right menu, observable and text](posts/9-right-menu-observable-and-text.html)!
