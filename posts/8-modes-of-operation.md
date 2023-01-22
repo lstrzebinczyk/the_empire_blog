@@ -2,26 +2,26 @@ Buckle up, this one is long and heavy on architecture.
 
 ## What are modes?
 
-We want to be able to interact with the world map in multiple ways. Think of a paint program: you have a tool to draw straight lines, or pencil, or coloring tool. You interact with the canvas in the same way, but depending on the tool, the result on a canvas is different.
+We want to be able to interact with the world map in many ways. Think of a paint program: you have a tool to draw straight lines, or a pencil, or color filling tool. You click on the canvas all the same, but what happens depends on the active tool. The tools are mediators between user interaction and the canvas.
 
-For this app, I've come to think of these "tools" as modes. Modes are mediators between user interaction and the world map. We want the currently active mode to process events, and interact with the world map according to their logic.
+For this app, I've come to think of these "tools" as modes. Instead of letting the `WorldMap` to process events, we want the active mode to do so, and let it decide how it will update the `WorldMap`.
 
 For now, we will be thinking about introducing first 2 modes:
 - `MoveMode`, allowing to move the map around and basic introspection
 - `POIMode`, allowing management of points of interest
 
-Fortunetely, we already have the entire behavior of `MoveMode` implemented, we just need to encapsulate it in a class.
+Fortunetely, we already have the entire behavior of `MoveMode` implemented. We "just" need to encapsulate it in a class and insert it into the workflow.
 
 ## Modes architecture
 
 The classes will be called `TheEmpire::Mode::MoveMode` and `TheEmpire::Mode::POIMode`. We'll begin by thinking how they should be used in the app:
-1. We want them to accept events instead of `WorldMap`, so we need to initialize it in `TheEmpire`, since this is where these events happen
-1. We want them to update `WorldMap`, so we'll pass that in an initializer.
-1. One of the modes will always be active
-1. Bottom menu should render buttons for all available modes, with clear indication which one is currently active
+1. They must process events instead of `WorldMap`
+1. They should be able to update `WorldMap`
+1. One of the modes must always be active
+1. Bottom menu should render buttons for all available modes, with indication which one is active
 1. Modes should be able to render to the world map
 
-So let's see how we can extend `TheEmpire` to get all of these requirements done.
+So let's see how we can extend `TheEmpire` to get all of these requirements done. As I often do, I'll start by establishing how I want the new classess to be used, and then I'll implement them to fit these expectations.
 
 We initialize the modes in `TheEmpire#initialize`:
 
@@ -40,7 +40,7 @@ We initialize the modes in `TheEmpire#initialize`:
 @active_mode = @move_mode
 ```
 
-We'll pass the modes data to the `BottomMenu`:
+Notice they receive the `@world_map` in an argument. That's how they will be able to update it. We'll pass the modes data to the `BottomMenu`. That's how it will be able to render buttons for each mode:
 
 ```crystal
 # src/the_empire.cr, class TheEmpire#initialize
@@ -53,7 +53,7 @@ We'll pass the modes data to the `BottomMenu`:
 )
 ```
 
-And finally, we'll update the `#handle_event` to use `@active_mode` instead of `@world_map`, as well as render the contents of `@active_mode`:
+And finally, we'll replace `@world_map` with `@active_mode` in `TheEmpire#handle_event` and render the contents of `@active_mode` in addition to other renders:
 
 ```crystal
 # src/the_empire.cr, class TheEmpire#initialize
@@ -76,32 +76,30 @@ def render
 end
 ```
 
-Perfect. This is how we want these classess to interact with the app. Let's fix all the ways in which we broke the app. I'll be showing the `MoveMode`, but `POIMode` will get identical treatment. So:
-
-```bash
-In src/the_empire.cr:28:44
-
- 28 | @move_mode = TheEmpire::Mode::MoveMode.new(@world_map)
-                                             ^--
-Error: wrong number of arguments for 'TheEmpire::Mode::MoveMode.new' (given 1, expected 0)
-```
-
-Of course, the modes must accept world map as argment:
+Perfect. The initial implementation of modes will be fairly simple:
 
 ```crystal
-# src/the_empire/mode/move_mode.cr
+# src/the_empire/modes/move_mode.cr
 
 class TheEmpire
   module Mode
     class MoveMode
+      include SF::Drawable
+
       def initialize(@world_map : TheEmpire::WorldMap)
+      end
+
+      def handle_event(event)
+      end
+
+      def draw(target : SF::RenderTarget, states : SF::RenderStates)
       end
     end
   end
 end
 ```
 
-Next!
+Moving on, compiler gives us this error about `BottomMenu`:
 
 ```bash
 In src/the_empire.cr:38:42
@@ -114,14 +112,15 @@ Overloads are:
  - TheEmpire::BottomMenu.new(position, size)
 ```
 
-This one is a bit more interesting. Of course, we passed additional arguments to `TheEmpire::BottomMenu`, and it doesn't know how to handle them. Look at the arguments it tells us it got:
+Of course, we passed additional arguments to `TheEmpire::BottomMenu`, and it doesn't know how to handle them. Look at the new arguments:
 
 ```crystal
 modes: Array(TheEmpire::Mode::MoveMode | TheEmpire::Mode::POIMode), active_mode: TheEmpire::Mode::MoveMode
 ```
 
-It tells us that `modes` is an array of either `MoveMode` or `POIMode`, and `active_mode` is an `MoveMode`. That is true, of course, but it is too specific. We need to have an idea that all of these are **some** modes.
-We'll introduce a parent class for these modes, to enforce unity:
+It tells us that `modes` is an array of either `MoveMode` or `POIMode`, and `active_mode` is an `MoveMode`. While this is true, it's way too specific. We need to work with an idea of **a** mode. All of the modes should be recognized as specialized instances of the same tool.
+
+We'll introduce a parent class and inherit:
 
 ```crystal
 # src/the_empire/mode/base_mode.cr
@@ -129,6 +128,8 @@ We'll introduce a parent class for these modes, to enforce unity:
 class TheEmpire
   module Mode
     abstract class BaseMode
+      include SF::Drawable
+
       def initialize(@world_map : TheEmpire::WorldMap)
       end
     end
@@ -148,12 +149,18 @@ class TheEmpire
       def initialize(world_map : TheEmpire::WorldMap)
         super(world_map)
       end
+
+      def handle_event(event)
+      end
+
+      def draw(target : SF::RenderTarget, states : SF::RenderStates)
+      end
     end
   end
 end
 ```
 
-So now we can extend the `BottomMenu`. We'll simply accept these modes as params and assign them to instance variables for now:
+Now we can extend the `BottomMenu` based on it. For now, we'll accept the new arguments and assign them to instance variables:
 
 ```crystal
 # src/the_empire/bottom_menu.cr, class TheEmpire::BottomMenu
@@ -166,98 +173,18 @@ def initialize(position, size, @modes, @active_mode)
 end
 ```
 
-Next!
-
-```bash
-Showing last frame. Use --error-trace for full trace.
-
-In src/the_empire.cr:67:18
-
- 67 | @active_mode.handle_event(event)
-                   ^-----------
-Error: undefined method 'handle_event' for TheEmpire::Mode::MoveMode
-```
-
-Of course, modes must handle events:
-
-```crystal
-# src/the_empire/modes/move_mode.cr
-
-class TheEmpire
-  module Mode
-    class MoveMode < TheEmpire::Mode::BaseMode
-      def initialize(world_map : TheEmpire::WorldMap)
-        super(world_map)
-      end
-
-      def handle_event(event)
-      end
-    end
-  end
-end
-```
-
-Next!
-
-```bash
-Showing last frame. Use --error-trace for full trace.
-
-In src/the_empire.cr:80:13
-
- 80 | @window.draw(@active_mode)
-              ^---
-Error: no overload matches 'SF::RenderWindow#draw' with type TheEmpire::Mode::MoveMode
-```
-
-Naturally, we want the modes to be drawable. We'll include the `SF::Drawable` into the parent class:
-
-```crystal
-# src/the_empire/mode/base_mode.cr
-
-class TheEmpire
-  module Mode
-    abstract class BaseMode
-      include SF::Drawable
-
-      def initialize(@world_map : TheEmpire::WorldMap)
-      end
-    end
-  end
-end
-```
-
-And add empty `#draw` method to the mode:
-
-```crystal
-# src/the_empire/modes/move_mode.cr
-
-class TheEmpire
-  module Mode
-    class MoveMode < TheEmpire::Mode::BaseMode
-      def initialize(world_map : TheEmpire::WorldMap)
-        super(world_map)
-      end
-
-      def handle_event(event)
-      end
-
-      def draw(target : SF::RenderTarget, states : SF::RenderStates)
-      end
-    end
-  end
-end
-```
-
 And that compiles correctly! Now, before we get to the exciting part of implementing the actual mode behavior, we need to think a bit about...
 
 ## Mode buttons
 
-We need to be able to freely pick which mode we are using, and that presents a little bit of a challange.
-We are going to solve this challange with the best `react.js` taught us: data down, actions up.
+We need to be able to freely pick an active mode. That presents a little bit of a challange. `BottomMenu` can render the buttons, because it got modes in initializer. That's easy.
+When one of these buttons is clicked, `BottomMenu` must somehow be able to tell `TheEmpire`, that we want to use a different mode.
+
+We'll solve this with the best `react.js` taught us: data down, actions up.
 
 ### Data down
 
-We pass `@modes` to the initializer of `BottomMenu`, so we can use them to render the corresponding buttons. I'm going to do what is called a pro-coder move:
+That's the mentioned easy part. We pass `@modes` to the initializer of `BottomMenu`, so we can use them to render the corresponding buttons. I'm going to start this with what is called a pro-coder move:
 
 ```crystal
 # src/the_empire/mode/base_mode.cr
@@ -277,26 +204,27 @@ class TheEmpire
 end
 ```
 
-This little trick will calculate a variable called `@button_text` for the modes, based on the class name.
+This little trick implements a `#button_text` method for all modes, based on the class name.
 It will return `Move` for `MoveMode` and `POI` for `POIMode`, easy.
 
-In `BottomMenu` we need to create the buttons based on passed `@modes`:
+In `BottomMenu` we can now create the buttons based on passed `@modes` and `@active_mode`:
 
 ```crystal
 # src/the_empire/bottom_menu.cr, class TheEmpire::BottomMenu
 
-# We are now going to have an array of buttons
 @buttons : Array(UI::Button)
 
 def initialize(position, size, @modes, @active_mode)
   @bounding_rectangle = SF::IntRect.new(position[0], position[1], size[0], size[1])
 
-  # easy peasy
   @buttons = @modes.map_with_index do |mode, index|
     UI::Button.new(
+      # each button will be 220 pixels to the right from where the previous started
       position: { @bounding_rectangle.position[0] + 20 + index * 220, @bounding_rectangle.position[1] + 20},
       size: {200, 80},
+      # text on the button is taken from the mode
       text: mode.button_text,
+      # button is active if the mode is currently active
       active: mode == @active_mode,
       on_click: ->(button : UI::Button) {
         deactivate_all!
@@ -312,14 +240,12 @@ That covers the "data down" part:
 
 ![Correct buttons](/the_empire_blog/docs/assets/posts/8/correct_buttons.png)
 
-Awesome, so the easy part is done. Our buttons are now rendered based on the `@modes`.
+We have 2 buttons based on available modes, and the `Move` mode is currently active. Awesome. Moving to...
 
 ### Actions up
 
-The concept of `Actions up` means, that if an action happens in child components (like `BottomMenu`) jurisdiction, it should tell parent component (`TheEmpire`) about it, and let it handle the outcome.
-In case at hand, if a button inside `BottomMenu` is clicked, that means `TheEmpire` must update which mode is the active one.
-
-The thing is, that we are going to need a way to send any custom information that something happened, alongside any custom data, from any child component back to `TheEmpire`.
+The concept of `Actions up` means, that child component (like `BottomMenu`) should be able to tell parent component (`TheEmpire`) that something happened and let it (the parent component) handle the outcome.
+In this case, if a button in `BottomMenu` is clicked, `TheEmpire` must update `@active_mode`.
 
 We're gonna get that done with events. Not `CrSFML` events, we will add new ones, specifically for that purpose:
 
@@ -338,7 +264,7 @@ class TheEmpire
 end
 ```
 
-We have a `TheEmpire::Event::ChangeModeEvent` struct, with a `mode` value. `TheEmpire` must be ready to handle it:
+We have a `TheEmpire::Event::ChangeModeEvent` struct, which represents the information, that active mode must change. `TheEmpire` must be ready to handle it:
 
 ```crystal
 # src/the_empire.cr, class TheEmpire
@@ -349,13 +275,13 @@ def handle_page_event(event : TheEmpire::Event)
     @active_mode = event.mode
   end
 
-  nil # we want to return nil, just to keep types clean
+  nil # this helps to keep the `Proc` types below simple
 end
 ```
 
-If we call that method with an instance of `TheEmpire::Event::ChangeModeEvent`, we'll change the `@active_mode` to one we received in the event.
+`#handle_page_event` is now how `TheEmpire` is allowed to process `TheEmpire::Event` events coming from any child components.
 
-Next step, is passing that new method to `BottomMenu`:
+Next step, we pass that new method to `BottomMenu`:
 
 ```crystal
 # src/the_empire.cr, class TheEmpire#initialize
@@ -369,8 +295,8 @@ Next step, is passing that new method to `BottomMenu`:
 )
 ```
 
-This wonderful piece of coding trickery means we are sending `#handle_page_event` method as a parameter to the `BottomMenu` class.
-Now we can omit the event from `BottomMenu`:
+With this wonderful piece of coding trickery, we can turn `#handle_page_event` method into a `Proc` and pass it into `BottomMenu` under the name of `omit_event`.
+We can now do this:
 
 ```crystal
 # src/the_empire/bottom_menu.cr, class TheEmpire::BottomMenu
@@ -395,7 +321,7 @@ def initialize(position, size, @modes, @active_mode, @omit_event)
 end
 ```
 
-When we click on any of these buttons, we create a `TheEmpire::Event::ChangeModeEvent` and call the received `@omit_event`, which then processess the event inside `TheEmpire`.
+When we click on any of these buttons, we create a `TheEmpire::Event::ChangeModeEvent` and call the `@omit_event` `Proc`, which then processess the event inside `TheEmpire`.
 Finally, we must update the `@handle_page_event` with this:
 
 ```crystal
@@ -405,6 +331,8 @@ def handle_page_event(event : TheEmpire::Event)
   case event
   when TheEmpire::Event::ChangeModeEvent
     @active_mode = event.mode
+
+    # this part is new
     @bottom_menu = TheEmpire::BottomMenu.new(
       position: {0, @window_height - BOTTOM_MENU_HEIGHT},
       size: {@window_width - RIGHT_MENU_WIDTH, BOTTOM_MENU_HEIGHT},
@@ -414,22 +342,22 @@ def handle_page_event(event : TheEmpire::Event)
     )
   end
 
-  nil # we want to return nil, just to keep types clean
+  nil
 end
 ```
 
-When processing the event, we need to rebuild the `@bottom_menu` from scratch after changing the `@active_mode`. This is because `BottomMenu` decides which button is active based on `@active_mode`, and after we've changed it, that change isn't propagated to `BottomMenu`. So we create it again, it gets the correct `@active_mode`, and indicates the program state correctly.
+When processing the event, we change `@active_mode`, but that doesn't automatically propagate to `BottomMenu`. If we want the `BottomMenu` to render based on the new `@active_mode`, we need to initialize it again with updated data.
 
 Long and difficult road led here, but alas, victory:
 
 <video width="100%" src="/the_empire_blog/docs/assets/posts/8/working_buttons.mp4" controls autoplay></video>
 
-While that might look exactly like it looked at the beginning of this post, we have developed important architecture! Actually, it looks like even less is working than used to, since currently we can't even move things.
-But that's easy, a cherry on top.
+While that looks exactly like what we had at the beginning, we have developed important architecture! Actually, even less is working than before, since we can't move things.
+But that's easy, a cherry on top. Let's implement the...
 
 ## Modes behavior
 
-I want all modes to move around with `AWSD` buttons, so we'll handle that event in the parent class:
+I want all modes to move around with `AWSD` buttons, so we'll handle that in the parent class:
 
 ```crystal
 # src/the_empire/mode/base_mode.cr
@@ -470,30 +398,7 @@ class TheEmpire
 end
 ```
 
-`POIMode` will just call the parent action:
-
-```crystal
-# src/the_empire/mode/poi_mode.cr
-
-class TheEmpire
-  module Mode
-    class POIMode < TheEmpire::Mode::BaseMode
-      def initialize(world_map : TheEmpire::WorldMap)
-        super(world_map)
-      end
-
-      def handle_event(event)
-        super(event)
-      end
-
-      def draw(target : SF::RenderTarget, states : SF::RenderStates)
-      end
-    end
-  end
-end
-```
-
-And `MoveMode` will get the ability to drag-and-drop and scroll:
+`MoveMode` will call the parent, plus get the ability to drag-and-drop and scroll:
 
 ```crystal
 # src/the_empire/mode/move_mode.cr
@@ -510,8 +415,10 @@ class TheEmpire
       end
 
       def handle_event(event)
-        super(event)
+        super(event) # <- This calls the `#handle_event` from parent class
 
+        # this below handles drag-and-drop and scroll
+        # it was just moved here from `WorldMap`
         case event
         when SF::Event::MouseButtonPressed
           if @world_map.bounding_rectangle.contains?(event.x, event.y)
@@ -547,11 +454,14 @@ class TheEmpire
 end
 ```
 
-And this is the end game:
+All of the event handling was removed from the `WorldMap`, as it was moved to `MoveMode`. `POIMode` will just call the parent action.
+
+Grand finale, we end up with this:
 
 <video width="100%" src="/the_empire_blog/docs/assets/posts/8/actually_separate_modes.mp4" controls autoplay></video>
 
 `MoveMode` supports `AWSD` and mouse actions, and `POIMode` supports `AWSD`, but doesn't react to mouse actions (trust me, I guess).
 
-And that's a big win! We will add actual drawing behavior to `POIMode` soon enough.
+Big win! We will add actual drawing behavior to `POIMode` soon enough.
+
 For now, we need to extend our UI capabilities a little bit, starting with [right menu, observable and text](9-right-menu-observable-and-text.html)!
