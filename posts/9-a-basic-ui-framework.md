@@ -328,12 +328,99 @@ end
 ```
 
 We now have a cached renderable `@ui` component, which is underneath a complex composition of components! And we no longer have to manually position the text inside the background, it happens automatically.
-Nothing changed visually:
+Nothing changed visually, but we implemented important architeture!
 
-INSERT IMAGE OF HOW NOTHING CHANGED VISUALLY
-
-But we implemented important architeture!
-
-With this new tool, we can now implement...
+We can now implement text inside a box. This should be enough to build...
 
 ## The right menu
+
+We want the right menu to present us information related to the active mode. Currently right menu isn't even aware of the active mode, so we'll start with that:
+
+```crystal
+# src/the_empire.cr, class TheEmpire#initialize
+
+@right_menu = TheEmpire::RightMenu.new(
+  position: {@window_width - RIGHT_MENU_WIDTH, 0},
+  size: {RIGHT_MENU_WIDTH, @window_height},
+  active_mode: @active_mode # <- this is new
+)
+```
+
+And we will have to update the active mode on `@right_menu` whenever active mode changes:
+
+```crystal
+# src/the_empire.cr, class TheEmpire
+
+def handle_page_event(event : TheEmpire::Event)
+  case event
+  when TheEmpire::Event::ChangeModeEvent
+    @active_mode = event.mode
+    @bottom_menu = TheEmpire::BottomMenu.new(
+      position: {0, @window_height - BOTTOM_MENU_HEIGHT},
+      size: {@window_width - RIGHT_MENU_WIDTH, BOTTOM_MENU_HEIGHT},
+      modes: @modes,
+      active_mode: @active_mode,
+      omit_event: ->handle_page_event(TheEmpire::Event)
+    )
+    @right_menu.active_mode = @active_mode # <- this is new
+  end
+
+  nil
+end
+```
+
+`RightMenu` doesn't support any of this, but it is easily fixable:
+
+```crystal
+# src/the_empire/right_menu.cr, class TheEmpire::RightMenu
+
+# we declare that we're now going to store a mode object
+@active_mode : TheEmpire::Mode::BaseMode
+# we are also going to store the ui
+@ui : UI::Item
+
+# save it during initialization
+def initialize(position, size, @active_mode)
+  @bounding_rectangle = SF::IntRect.new(position[0], position[1], size[0], size[1])
+  # call the method we just implemented on the modes to give us a ui
+  @ui = @active_mode.right_menu(@bounding_rectangle)
+end
+
+# and have a method to update it
+def active_mode=(new_active_mode)
+  @active_mode = new_active_mode
+  # whenever active mode changes, create a new ui
+  @ui = @active_mode.right_menu(@bounding_rectangle)
+end
+
+# use the new @ui for rendering
+def draw(target : SF::RenderTarget, states : SF::RenderStates)
+  target.draw(@ui, states)
+end
+```
+
+So the only missing piece is actually implementing the ui-generating function inside modes. For now, we'll just copy what we did for buttons:
+
+```crystal
+# src/the_empire/mode/move_mode.cr, class TheEmpire::Mode::MoveMode
+
+# we'll accept a bounding rectangle and return a ui component encompassing that rectangle, with a text in the middle and a background
+def right_menu(bounding_rectangle : SF::IntRect)
+  UI::Box.new(bounding_rectangle) do |c|
+    c.text(string: "Move")
+  end
+    .background(fill_color: Constants::COLOR::MENU::BACKGROUND)
+end
+```
+
+Let's recap:
+- Both modes now have a `#right_menu` method, which accepts a bounding rectangle, and returns a `UI::Item` object
+- Right menu now follows what the active mode is
+- When right menu is created, and whenever active mode changes, a ui is generated for the right menu with the `#right_menu` method
+
+And voila! We have useful information on screen:
+
+<video width="100%" src="/the_empire_blog/docs/assets/posts/9/working_right_menu.mp4" controls autoplay></video>
+
+Great success, we click on screen and things happen. We need that ui system to handle several more use cases, so in the next one,
+we'll introduce [vertical, horizontal and spacer](10-vertical-horizontal-and-spacer.html)!
