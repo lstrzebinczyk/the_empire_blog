@@ -464,4 +464,4 @@ Grand finale, we end up with this:
 
 Big win! We will add actual drawing behavior to `POIMode` soon enough.
 
-For now, we need to extend our UI capabilities a little bit, starting with [right menu, observable and text](9-right-menu-observable-and-text.html)!
+For now, we need to extend our UI capabilities a little bit, starting with [a basic ui framework](9-a-basic-ui-framework.html)!

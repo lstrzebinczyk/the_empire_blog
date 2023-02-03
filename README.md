@@ -13,4 +13,5 @@ If you wish to discuss any parts of this, I'll be hanging around [on discord](ht
 1. [Implementing a button](posts/6-implementing-a-button)
 1. [Events management](posts/7-events-management)
 1. [Modes of operation](posts/8-modes-of-operation.html)
-1. [Right menu, observable and text](posts/9-right-menu-observable-and-text.html)
+1. [Basic UI Framework](posts/9-a-basic-ui-framework.html)
+1. [Vertical, Horizontal and Spacer](posts/10-vertical-horizontal-and-spacer.html)
