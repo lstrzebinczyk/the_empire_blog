@@ -1,16 +1,17 @@
 ## The plan
 
-There are, quite clearly, 2 different user interfaces in this app. World map is the first one. It will h how to draw things in a clear, understandable manner. That is a problem for some oave an interesting problems related tother time.
+There are, quite clearly, 2 different user interfaces in this app. World map is the first one. How to draw things clearly and understandably in there is a problem for another time.
+THe other one is everything else. We need to build a basic user interface (UI), which will show data and allow for interaction. For web apps, there's html and css. Since we don't have that, we need to build one from scratch, based on text and rectangles.
 
-The other user interface is much more mundane and basic: we need to present data and allow for basic interaction. In a web application, we would use html, but since we don't have that, we need to build one from more basic building blocks.
+I will present a progression from an idea, through implementation, to a reasonable working system through several next posts, but don't let it fool you. I've spent quite a bit of time and went through multiple iterations before I had something usable and presentable. This is a very hard problem to solve, and what you will not see in here is all the ideas that turned out not to work, once there is more than the most basic cases.
 
-Now, I want to note this: I will present a quite clear progression from idea, through implementation, all the way to a working system. Though it might look like a straightforward, the system I originally implemented went through multiple phases and ideas for every aspect of it. Building a UI framework is hard, and trying to solve some of the issues myself gave me a new appreciation for the technologies widely used for this purpose.
+Building this from scratch gave me new appreciation for html, and other frameworks for organizing UIs.
 
-Let's start this by checking...
+Allrighty then, first we need to analyze...
 
 ## What we have
 
-First, we have a button component. Let's see:
+And that's mostly the button component:
 
 ```crystal
 # src/lib/ui/button.cr, class UI::Button
@@ -34,9 +35,9 @@ def draw(target : SF::RenderTarget, states : SF::RenderStates)
 end
 ```
 
-Visually, it's a rectangle of a specific color, with some text sentered exactly in the middle.
+Visually, it's a rectangle of a specific color, with some text centered vertically and horizontally. In code, every time we draw it, we rebuild and reposition both the background, and the text.
 
-Second, we have the bottom menu:
+In addition to that, we have the bottom menu:
 
 ```crystal
 # src/the_empire/bottom_menu.cr, class TheEmpire::BottomMenu
@@ -71,54 +72,38 @@ end
 ```
 
 Visually, we have a rectangle with a specific color, and a set of buttons rendered horizontally, aligned to the right, and centered vertically.
+Button positions are hardcoded, and the background is recalculated on each render.
 
 ## What we want
 
-Major issue with this approach is having to manually specify position for everything. I definitely don't want to calculate pixels every time I add something to the ui.
-And I most definitely don't want to rething how to center things, or align to left/right every time I add new ui items.
+Major issue with this approach is having to manually specify position for everything. This system must be flexible and allow me to change things around, experiment. What if we try bigger gap between the buttons? Or make the buttons wider, or less wide, or less height? All of these ideas would require me to recalculate pixel positions for each button. That's not acceptable.
 
-I want to *declare* what I want, and have a system which will figure out where to put things.
+I want to *declare* what I want, and have a system which will figure out details for me.
 
-So how would a better system look like?
-- I want to *declare* what I want, and have a system which will figure out where to put things.
-- I want a component, which will accept a single child component and center it
-- I want a component, which will accept a collection of children and render them horizontally one after another. Another one for vertical rendering, but that's for later.
-- I want my horizontal component to be able to align children to the leftmost available area
-- Finally, I want all of this toolset to be composable and reusable
+Let's go through what I want:
+- I want to tell things to be centered inside an area
+- I want to be able to tell things to render vertically and horizontally, one after another
+- I want that to be built as a composable, reusable set of components.
+
+We'll deal with the first point (and the third, by necessity) today, and with the second point next time.
 
 ## UI::Item
 
-So how would a buttons implementation look like? I like a structure like this:
+This time, I'll do it a bit backwards: I'll by thinking about the building blocks of the system, and we'll then compose them to improve the implementation of `UI::Button`.
 
-```crystal
-UI::Box.new(@bounding_rectangle) do |c|
-  c.text(string: @text)
-end
-  .background(fill_color: fill_color())
-```
-
-From the code above:
-- `UI::Box` is a component which takes a bounding box (and thus an area on the screen), takes a single component, and centers that component inside itself.
-- `UI::Box` initialization takes a block, and by executing that block we create a sub-component and storing it inside `UI::Box`
-- `c.text(string: @text)` creates a sub-component, which simply renders a text
-- `.background(fill_color: fill_color())` updates the background color of the `UI::Box`.
-
-The `UI::Box` should be able to take any ui component: a `text`, `button`, anything at all. To achieve that, we need a way to represent a concept of visual component in the code.
-We'll do it with a module. It will be expected to be included in all classess representing UI components.
-
-** snaps fingers **
+First, we need a single, unified idea of what a UI Component is. I'll introduce a `UI::Item` module, and all UI components will have to include it:
 
 ```crystal
 # src/lib/ui/_item.cr
 
 module UI
   module Item
-    # since all items must be drawable, it makes sense to declare it here
+    # all ui items must be drawable
     include SF::Drawable
 
-    # this will force all ui components to deal with being told to move
+    # all ui components must be able to move
     abstract def position=(new_position : Tuple(Int32, Int32))
-    # all ui components must have a position on screen
+    # all ui components take a specific area of screen, and they must be able to tell what it is
     abstract def bounding_rectangle : SF::IntRect
 
     # all ui components can have a background
@@ -136,6 +121,7 @@ module UI
       self
     end
 
+    # If there is a background, draw it
     def draw(target : SF::RenderTarget, states : SF::RenderStates)
       if fill_color = @fill_color
         background = SF::RectangleShape.new(bounding_rectangle)
@@ -148,29 +134,106 @@ module UI
 end
 ```
 
+## UI::Box
+
+We need a parent UI component. One that we will be able to tell: "Here is an area of the screen and a set of requirements. Figure it out.".
+To make things simple, that parent component will be allowed to have a single child, and will render it centered vertically and horizontally within itself.
+
+Let's go through the implementation:
+
+```crystal
+# src/lib/ui/containers/box.cr
+
+module UI
+  class Box
+    # The box itself is a ui component
+    include UI::Item
+
+    # This is the single child component. We'll allow it to be nil.
+    @renderable : UI::Item | Nil
+
+    # It's expected to get bounding rectangle in the argument, and will expose it
+    getter bounding_rectangle : SF::IntRect
+
+    # Other than @bounding_rectangle, expect a block and call that black with itself
+    # We will expect that block to set @renderable
+    def initialize(@bounding_rectangle, &block : UI::Box -> UI::Item)
+      @renderable = nil
+      block.call(self)
+    end
+
+    # UI::Item forces us to give it a `#position=` method.
+    # If new position is given to the parent, we must reposition the child as well
+    def position=(new_position)
+      @bounding_rectangle.position = new_position
+      reposition_renderable!
+    end
+
+    # Nothing interesting happens here, `super` draws the background, then draw the child component
+    def draw(target : SF::RenderTarget, states : SF::RenderStates)
+      super(target, states)
+
+      if item = @renderable
+        target.draw(item, states)
+      end
+    end
+
+    # If there is a child component, delegate all events to the child component
+    def handle_event(event : SF::Event)
+      if item = @renderable
+        item.handle_event(event)
+      end
+    end
+
+    # Initializer receives a block, and we will expect that block to set @renderable.
+    # This method is how it does so. It sets the renderable, and makes sure the positioning is correct.
+    def add_renderable(renderable : UI::Item)
+      @renderable = renderable
+      reposition_renderable!
+    end
+
+    # Center the child component horizontally and vertically
+    # We figured out the logic previously inside the UI::Button, and can now move it here.
+    # Notice that for this to work, the child components must have `#bounding_rectangle` and `#position=` methods.
+    # All UI::Item components must have them, so we can use any UI::Item component as a child
+    # That is, in fact, why we needed UI::Item to implement them.
+    def reposition_renderable!
+      if item = @renderable
+        item_width = item.bounding_rectangle.width
+        item_height = item.bounding_rectangle.height
+
+        x_position = (bounding_rectangle.left + bounding_rectangle.width / 2 - item_width / 2).to_i
+        y_position = (bounding_rectangle.top + bounding_rectangle.height / 2 - item_height / 2).to_i
+
+        item.position = {x_position, y_position}
+      end
+    end
+  end
+end
+```
+
+Alright, we have a box and a concept of UI item. Since we are aiming at making the button implementation simpler, the missing piece is ...
+
 ## UI::Text
 
-Everything we need for a text component is already implemented in the `UI::Button`. We can easily extract it and implement a simple `UI::Text`:
+A text component. A fairly simple wrapper over `SF::Text`. Everything it needs is already implemented inside `UI::Button`, we just need to extract it:
 
 ```crystal
 # src/lib/ui/text.cr
 
 module UI
   class Text
-    # That module we created above. It says "I am a ui component"
     include UI::Item
 
-    # All UI is now going to be built with this new system, and therefore UI::Box will be the only object passed around.
-    # All ui components will be parts of a components tree, and therefore there will always be a parent container.
-    # I have decided that we will be passing that container into all child components.
-    # It comes in handy
+    # I have decided all child components will receive their parent in the constructor. Comes in handy.
+    # Other than that it's straightforward, take `string`, build a `@text`.
     def initialize(@parent : UI::Box, string : String)
       @text = SF::Text.new(string, Constants::FONT, 60)
       @text.color = SF::Color::Black
     end
 
-    # This is required by the UI::Item.
-    # Since we have only 1 element of internal structure, we can reuse it for bounding rectangle.
+    # Reuse `@text.global_bounds` for bounding rectangle.
+    # That `#to_i` method isn't there, but it's easy enough to add : )
     def bounding_rectangle : SF::IntRect
       @text.global_bounds.to_i
     end
@@ -187,8 +250,8 @@ module UI
       @text.position = {position_x, position_y}
     end
 
+    # Render the background, render the text
     def draw(target : SF::RenderTarget, states : SF::RenderStates)
-      # this renders the background, should it have some
       super(target, states)
 
       target.draw(@text, states)
@@ -197,88 +260,24 @@ module UI
 end
 ```
 
-Allright, awesome.
-
-Now, the meaty part:
+Easy-peasy. And finally, we want the `UI::Box` to be able to create `UI::Text` and set it as a children. We'll do it like so:
 
 ```crystal
-# src/lib/ui/containers/box.cr
+# src/lib/ui/containers/box.cr, class UI::Box
 
-module UI
-  class Box
-    # The box is itself a ui component
-    include UI::Item
+def text(**args)
+  text = UI::Text.new(self, **args)
+  add_renderable(text)
 
-    # We expect this component to just have 1 child component.
-    @renderable : UI::Item | Nil
-
-    getter bounding_rectangle : SF::IntRect
-
-    # Save the @bounding_rectangle, expect a block and call that black with itself
-    def initialize(@bounding_rectangle, &block : UI::Box -> UI::Item)
-      @renderable = nil
-      block.call(self)
-    end
-
-    # Main job of this component is to hold another component. Now, when it's asked to change position, it must move itself
-    # but also make sure that the child components position remains correct
-    def position=(new_position)
-      @bounding_rectangle.position = new_position
-      reposition_renderable!
-    end
-
-    # Nothing interesting happens here, draw the background, draw the child component
-    def draw(target : SF::RenderTarget, states : SF::RenderStates)
-      super(target, states)
-
-      if item = @renderable
-        target.draw(item, states)
-      end
-    end
-
-    # If there is a child component, delegate all events to the child component
-    def handle_event(event : SF::Event)
-      if item = @renderable
-        item.handle_event(event)
-      end
-    end
-
-    # This is how we will add text component as own child.
-    # We could implement it simpler, yes, but that structure will come in handy in next post.
-    def text(**args)
-      text = UI::Text.new(self, **args)
-      add_renderable(text)
-
-      text
-    end
-
-    # That's also quite plain. Set the component as new child component and reposition it.
-    def add_renderable(renderable : UI::Item)
-      @renderable = renderable
-      reposition_renderable!
-    end
-
-    # After setting the child component and changing position of the box, we want to make sure the child component is precisely in the middle
-    # We figured out the logic previously, and can now move it here.
-    # Notice that we expect the child components to have `#bounding_rectangle` and `#position=` methods
-    # Since all UI::Item components are forced to implement those, we can use any component that includes that module as a child component in the box
-    # That is, in fact, why we needed UI::Item to implement these methods.
-    def reposition_renderable!
-      if item = @renderable
-        item_width = item.bounding_rectangle.width
-        item_height = item.bounding_rectangle.height
-
-        x_position = (bounding_rectangle.left + bounding_rectangle.width / 2 - item_width / 2).to_i
-        y_position = (bounding_rectangle.top + bounding_rectangle.height / 2 - item_height / 2).to_i
-
-        item.position = {x_position, y_position}
-      end
-    end
-  end
+  text
 end
 ```
 
-There's a lot to unpack here, but that allows us to change buttons implementation to the following:
+That's a lot of setup, but we're at the finishing line. All of this allows us to reorganize the...
+
+## UI::Button
+
+Once again, there is a lot to unpack here. Let's check the new implementation of `UI::Button`, and then I'll explain the interesting bits:
 
 ```crystal
 # src/lib/ui/button.cr
@@ -327,14 +326,28 @@ module UI
 end
 ```
 
-We now have a cached renderable `@ui` component, which is underneath a complex composition of components! And we no longer have to manually position the text inside the background, it happens automatically.
-Nothing changed visually, but we implemented important architeture!
+First thing to notice is that this `UI::Button` is not a `UI::Item`. It will be later. For now we are only interested in reorganizing it's internals with what we introduced.
 
-We can now implement text inside a box. This should be enough to build...
+Second, this is the grand finale:
+```crystal
+private def build_ui
+  UI::Box.new(@bounding_rectangle) do |c|
+    c.text(string: @text)
+  end
+    .background(fill_color: fill_color())
+end
+```
+
+It's our new UI framework in working! It's a `UI::Box`, it receives a block which sets a `UI::Text` as it's child, we give it a `@bounding_rectangle` in constructor, and a background.
+Additionally, instead of calculating the UI on every render, we'll create it in constructor, save it, and render the saved variable.
+
+Nothing changed visually, but we implemented important architecture!
+
+Great success. And since we can now implement text inside a box, it should be enough to build...
 
 ## The right menu
 
-We want the right menu to present us information related to the active mode. Currently right menu isn't even aware of the active mode, so we'll start with that:
+We want the right menu to present information related to the active mode. Currently right menu isn't even aware of the active mode, so we'll start with that:
 
 ```crystal
 # src/the_empire.cr, class TheEmpire#initialize
@@ -382,29 +395,30 @@ end
 # save it during initialization
 def initialize(position, size, @active_mode)
   @bounding_rectangle = SF::IntRect.new(position[0], position[1], size[0], size[1])
-  # call the method we just implemented on the modes to give us a ui
+
+  # It's a situation similiar to what we did in the `UI::Button`,
+  # except we want the `@active_mode` to produce a `@ui` for the right menu.
   @ui = @active_mode.right_menu(@bounding_rectangle)
 end
 
-# and have a method to update it
+# Whenever active mode changes, we'll need a new UI
 def active_mode=(new_active_mode)
   @active_mode = new_active_mode
-  # whenever active mode changes, create a new ui
   @ui = @active_mode.right_menu(@bounding_rectangle)
 end
 
-# use the new @ui for rendering
+# Render the new @ui
 def draw(target : SF::RenderTarget, states : SF::RenderStates)
   target.draw(@ui, states)
 end
 ```
 
-So the only missing piece is actually implementing the ui-generating function inside modes. For now, we'll just copy what we did for buttons:
+So the only missing piece is actually implementing the ui-generating function inside modes. Let's just copy what we did for buttons:
 
 ```crystal
 # src/the_empire/mode/move_mode.cr, class TheEmpire::Mode::MoveMode
 
-# we'll accept a bounding rectangle and return a ui component encompassing that rectangle, with a text in the middle and a background
+# we'll accept a bounding rectangle and return a ui component encompassing that rectangle, with a background and a text in the middle
 def right_menu(bounding_rectangle : SF::IntRect)
   UI::Box.new(bounding_rectangle) do |c|
     c.text(string: "Move")
@@ -413,14 +427,12 @@ def right_menu(bounding_rectangle : SF::IntRect)
 end
 ```
 
-Let's recap:
-- Both modes now have a `#right_menu` method, which accepts a bounding rectangle, and returns a `UI::Item` object
-- Right menu now follows what the active mode is
-- When right menu is created, and whenever active mode changes, a ui is generated for the right menu with the `#right_menu` method
+We'll also give a respective method to `POIMode`.
 
 And voila! We have useful information on screen:
 
 <video width="100%" src="/the_empire_blog/docs/assets/posts/9/working_right_menu.mp4" controls autoplay></video>
 
-Great success, we click on screen and things happen. We need that ui system to handle several more use cases, so in the next one,
-we'll introduce [vertical, horizontal and spacer](10-vertical-horizontal-and-spacer.html)!
+Great success, we click on screen and things happen.
+
+In the next one, we'll handle more use case by introducing [vertical, horizontal and spacer](10-vertical-horizontal-and-spacer.html)!
