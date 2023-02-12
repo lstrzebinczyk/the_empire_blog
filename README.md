@@ -15,3 +15,4 @@ If you wish to discuss any parts of this, I'll be hanging around [on discord](ht
 1. [Modes of operation](posts/8-modes-of-operation.html)
 1. [Basic UI Framework](posts/9-a-basic-ui-framework.html)
 1. [Vertical, Horizontal and Spacer](posts/10-vertical-horizontal-and-spacer.html)
+1. [Making it look more like a map](posts/11-making-it-look-like-a-map.html)
