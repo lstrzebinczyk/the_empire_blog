@@ -1,32 +1,31 @@
-In previous post we introduced a basic UI framework, which allowed us to define UI of a button declaratively. It is clear what our next steps are if we check out the app:
+In previous post we introduced a basic UI framework, which allowed us to define UI of a button declaratively. To figure out what is our next step, we check the rendered app:
 
-![The app so far](/the_empire_blog/docs/assets/posts/2/nonempty_white_screen.png)
+![The app so far](/the_empire_blog/docs/assets/posts/10/it_is_bottom_menu.png)
 
-Notice bottom menu has 2 buttons, aligned to the left. We need the UI framework to be able to deal with:
-- rendering UI items horizontally
-- rendering buttons inside collections
-- aligning UI items as we request
+Notice bottom menu has 2 buttons, aligned to the left. In order to build it declaratively, the UI framework must be able to:
+- render a collection of UI items horizontally
+- render a button buttons inside collections
+- align UI items in various ways
 
 And that is our plan for today.
 
 ## UI::Horizontal
 
-We are going to borrow a concept from [SwiftUI](https://developer.apple.com/xcode/swiftui/). We are going to introduce a `UI::Horizontal` component, which will do the following:
-- It will be a UI::Component
+We are going to borrow several concepts from [SwiftUI](https://developer.apple.com/xcode/swiftui/). We are going to introduce a `UI::Horizontal` component, which will do the following:
+- It will be a UI::Item
 - It will accept a collection of children, and render them horizontally, left to right
-- It will accept a parent and be rendered through `UI::Box` initialization
+- It will accept a parent and be rendered through `UI::Box`
 
 But first...
 
 ### UI::Collection
 
 `UI::Horizontal` and `UI::Box` will be similiar in many ways:
-- They accept a block, which define children components
-- They will have children component
+- They accept a block, which define children components through (at least partially) unified interface
 - They will be responsible for repositioning of own children under some circumstances
 
-And we will later also add `UI::Vertical`. These components share enough features, that we will give them a name: they are a collection components.
-Let's introduce a parent class for them:
+These 2 components share enough features, that we can name a concept they represent: they are a collection components.
+We will express what that means with a module:
 
 ```crystal
 # src/lib/ui/containers/_collection.cr
@@ -65,14 +64,15 @@ module UI
     include UI::Item
     include UI::Collection
 
-    # We will store multiple UI::Item components as children
+    # We will store multiple UI::Item as renderables
     @renderable : Array(UI::Item) = [] of UI::Item
-    # Immediete plan is to create this component as a children of UI::Box, so we'll store parent like other components do
+    # Plan is to create this component as a child of UI::Box, so we'll store parent like other components do
     @parent : UI::Collection
     @position : Tuple(Int32, Int32)
 
     def initialize(@parent, gap = 20, &block : UI::Horizontal -> )
-      # We must expose our bounding box. Position is mostly governed by the parent, so we'll just save it to a variable
+      # We must expose our bounding box, but we will do it differentely this time.
+      # Position is governed by the parent, so we'll just save it to a variable
       @position = {@parent.bounding_rectangle.left, @parent.bounding_rectangle.top}
       # This represents the gap between individual child components. We default it to 20, but allow setting any
       @gap = gap
@@ -83,16 +83,14 @@ module UI
 
     # While @position is strictly set by parent, width and height depend only on the children.
     # Since we will be stacking children horizontally, our width is sum of all widths + gaps between the components
-    # And our height is the heighest children
     def width
       @renderable.sum(&.bounding_rectangle.width) + (@renderable.size - 1) * @gap
     end
 
+    # And our height is that of the heighest child
     def height
       @renderable.max_of?(&.bounding_rectangle.height) || 0
     end
-
-    ## UI::Item
 
     # Unlike other components, we will not cache bounding rectangle. We'll calculate it every time.
     def bounding_rectangle : SF::IntRect
@@ -106,7 +104,7 @@ module UI
     end
 
     # Similiar to UI::Box, but deal with an array of renderables.
-    # call `super`, then draw each renderable
+    # call `super`, which draws the background, then draw each renderable
     def draw(target : SF::RenderTarget, states : SF::RenderStates)
       super(target, states)
 
@@ -116,14 +114,12 @@ module UI
     end
 
     # Once again, similiar to UI::Box
-    # Delegate event to children, let children decide
+    # Delegate event to children, let them decide how to handle
     def handle_event(event : SF::Event)
       @renderable.each do |item|
         item.handle_event(event)
       end
     end
-
-    ## UI::Collection
 
     # In UI::Box we set our single renderable to argument
     # Here we push it to `@renderable` array and reposition
@@ -151,7 +147,8 @@ module UI
           x_position = previous_item.bounding_rectangle.left + previous_item.bounding_rectangle.width + @gap
           y_position = @position[1]
 
-          # For every next child, render it at the same height, but `@gap` pixels to the right from where the previous one ended
+          # For every next child, render it at the same height,
+          # but `@gap` pixels to the right from where the previous one ended
           item.position = {x_position, y_position}
         end
       end
@@ -173,12 +170,12 @@ def horizontal(**args, &block : UI::Horizontal -> )
 end
 ```
 
-That should allow us to have horizontal stacking. Now we just need to update...
+That should should do the trick. Now we just need to update the...
 
 ## UI::Button
 
-We already have `UI::Button`, but the problem is that it is not `UI::Item`. This is easily fixable by replacing `include SF::Drawable` with `include UI::Item` and implementing the missing methods.
-Second issue is that it must accept a `@parent`, but that is also trivially done.
+We already have `UI::Button`, but it is not `UI::Item`. This is easily fixable by replacing `include SF::Drawable` with `include UI::Item` and implementing the missing methods.
+Second issue is that it must accept a `@parent`, but that is also trivially done. I will do all of these changes off-screen.
 
 Third issue is that we must be able to create it as a child of `UI::Collection`, which is easy enough:
 
@@ -193,9 +190,9 @@ def button(**args)
 end
 ```
 
-## New TheEmpire::BottomMenu
+## New `TheEmpire::BottomMenu`
 
-With these additions, we can rewrite the UI for bottom menu with our framework! We are going to rewrite most of the file, so once again, full class drop:
+With these additions, we can rewrite the UI for bottom menu with our framework! We are going to rewrite most of the file, buckle up:
 
 ```crystal
 # src/the_empire/bottom_menu.cr
@@ -228,7 +225,7 @@ class TheEmpire
     private def build_ui
       # Define a `UI::Box` over the entire available area
       UI::Box.new(@bounding_rectangle) do |c|
-        # define a `horizontal` as its children
+        # define a `horizontal` as its child
         c.horizontal do |c|
           # loop over the @modes
           @modes.each do |mode|
@@ -257,22 +254,21 @@ And with all this laborious experiments we get this:
 
 And it works like a charm! Nothing changed visually, but...
 
-Actually it did change visually, exactly like we asked it, too. The buttons are centered, instead of aligned to the right. Because the `Horizontal` is considered only as wide and heigh as the 2 buttons, and `UI::Box` centered it. What we are missing is
+Actually it did change visually. We kind of asked it to. The `Horizontal` is considered as wide and heigh as the 2 buttons, and `UI::Box` centers it. This makes the buttons be centered in the bottom menu. What we want is for them to be aligned to the left. We'll achieve that with another idea taken from the [SwiftUI](https://developer.apple.com/xcode/swiftui/), the...
 
 ## UI::Spacer
 
-Spacer is another concept taken from the [SwiftUI](https://developer.apple.com/xcode/swiftui/). It's role is to fill in all of available space. The idea (for horizontal) is as follows:
+It role of a spacer is to fill in all available space. The idea (for horizontal spacer) is as follows:
 1. We analyze how much width we have available. Lets say it is 1000 pixels.
-2. We analyze how much width do all (non-spacer) components take. Let's say that is 200 pixels.
+2. We analyze how much width do all non-spacer components take. Let's say that is 200 pixels.
 3. We analyze how much width is left, still available.
 4. If there are no spacer components in the `UI::Horizontal`, this is the end of the story
 5. If there are spacer components, we distribute the remaining width between them.
 
-So, for the scenario above, if there is 2 spacer, we will give it a width of 800, if there are 2, we will give each of them 400 width, and so on.
+So, for the scenario above, if there is 1 spacer, we will give it a width of 800, if there are 2, we will give each of them 400 width, and so on.
+Their only role is to fill available space. This will allow us to strategically position the non-spacer components as we wish.
 
-They are only to be there and have a width. This will allow us to strategically position the non-spacer components as we wish.
-
-In particular, if we add a spacer at the end of our buttons list, it will expand and push the buttons to the left, which is exactly what we want. So let's write the code:
+In particular, if we add a spacer at the end of our buttons list, it should push the buttons to the left. So, how wide will a single spacer be?
 
 ```crystal
 # src/lib/ui/containers/horizontal.cr, class UI::Horizontal
@@ -280,7 +276,6 @@ In particular, if we add a spacer at the end of our buttons list, it will expand
 # calculte how much width does a single child spacer have
 def spacer_width
   # how many spacers do we have?
-  # we'll implement the UI::HorizontalSpacer class next
   spacers_count = @renderable.select(UI::HorizontalSpacer).size
   # how much width do all the non-spacers take?
   non_spacers_width = @renderable.reject(UI::HorizontalSpacer).sum(&.bounding_rectangle.width) + (@renderable.size - 1) * @gap
@@ -290,13 +285,11 @@ def spacer_width
 end
 ```
 
-Now, the actual spacer class:
+The code above depends on `UI::HorizontalSpacer` objects. It's implementation is actually very simple:
 
 ```crystal
 # src/lib/ui/horizontal_spacer.cr
 
-# it is actually very simple. Needs no height, width is taken directly from the class we calculated before
-# `#position=` and `#bounding_rectangle` are required by `UI::Item`
 module UI
   class HorizontalSpacer
     include UI::Item
@@ -371,7 +364,7 @@ And voila:
 
 ![buttons aligned to the left](/the_empire_blog/docs/assets/posts/10/spacer_right.png)
 
-I call that a win. Not only did we implement important architecture, we changed visuals as we wanted. For reference, this would be the result if we put the spacer in the beginning of horizontal:
+Not only did we implement important architecture, we changed visuals as we wanted! For reference, this would be the result if we put the spacer in the beginning of horizontal:
 
 ![buttons aligned to the right](/the_empire_blog/docs/assets/posts/10/spacer_left.png)
 
@@ -379,11 +372,13 @@ And if we put one in the end, one in the beginning, and one between the buttons:
 
 ![buttons spaced between](/the_empire_blog/docs/assets/posts/10/spacer_between.png)
 
-We can position elements as we please with this spacer. One remaining issue is this: buttons are aligned all the way to the end of screen. It isn't visually pleasing. It is easy to understand why that happens: if there is a spacer, it fills entire space provided by the parent. We need some sort of padding, and we'll do it right away.
+We can now position elements within collections.
+
+One remaining issue is this: buttons are aligned all the way to the end of screen, which doesn't look to great. It is easy to understand why that happens: if there is a spacer, it fills entire space provided by the parent. We need some sort of padding. A collection component should be able to define it's padding, and that would make bounding box available for the children smaller.
 
 ## Padding
 
-We'll add new abstract method to collection:
+We'll add new abstract method to collection, and it will represent that smaller bounding rectangle:
 
 ```crystal
 # src/lib/ui/containers/_collection.cr, class UI::Collection
@@ -391,8 +386,7 @@ We'll add new abstract method to collection:
 abstract def children_bounding_rectangle : SF::IntRect
 ```
 
-This means, we expect each collection class to implement a method called `#children_bounding_rectangle`, which will return a rectangle.
-There are now 2 rectangle methods in our architecture:
+There are now 2 rectangle-returning methods in our architecture:
 - `bounding_rectangle`, which defines components **own** space on screen
 - `children_bounding_rectangle`, which defines area available for components children.
 
@@ -406,26 +400,23 @@ def children_bounding_rectangle : SF::IntRect
 end
 ```
 
-We will simply copy whatever our parent gave us. For `UI::Box`, however:
+`UI::Horizontal` doesn't need padding for now, so we'll just say it's `#children_bounding_rectangle` is whatever the parent has.
+
+For `UI::Box`, however, we will hardcode a padding:
 
 ```crystal
 # src/lib/ui/containers/box.cr, class UI::Box
 
 def initialize(@bounding_rectangle, &block : UI::Box -> UI::Item)
   @renderable = nil
-  @padding = 20 # <- This is new
+  @padding = 20 # <- This is new. Hardcode it's value, no need to configure it.
 
   block.call(self)
 end
-```
-
-And to make use of the value:
-
-```crystal
-# src/lib/ui/containers/box.cr, class UI::Box
 
 # Calculate new bounding rectangle based on the `#bounding_rectangle` and `@padding`
-# it starts `@padding` pixels to the left and `@padding` pixels to the bottom, and is `2 * @padding` narrower and `2 * @padding` shorter
+# it starts `@padding` pixels to the left the bottom,
+# and is `2 * @padding` narrower and shorter
 def children_bounding_rectangle : SF::IntRect
   top = bounding_rectangle.top + @padding
   left = bounding_rectangle.left + @padding
@@ -436,7 +427,7 @@ def children_bounding_rectangle : SF::IntRect
 end
 ```
 
-Alright, so much width are spacers allowed to take, if we take that `@padding` into account? Exactly this much:
+Our calculation of how much width do spacers get must be also updated:
 
 ```crystal
 # src/lib/ui/containers/horizontal.cr, class UI::Horizontal
@@ -446,7 +437,6 @@ def spacer_width
   non_spacers_width = @renderable.reject(UI::HorizontalSpacer).sum(&.bounding_rectangle.width) + (@renderable.size - 1) * @gap
 
   # This is new. It now takes `children_bounding_rectangle.width` instead of `@parent.bounding_rectangle`.
-  # That takes gap into account
   (children_bounding_rectangle.width - non_spacers_width) / spacers_count
 end
 ```
@@ -457,12 +447,14 @@ That's much better:
 
 ## UI::Vertical
 
-We mostly focused on the horizontal component today, but vertical is nearly a copy-paste. The only logic that is different is :
-- in `#reposition_renderable!`, where instead of repositioning children left-to-right, we want to reposition them top-to-bottom
-- in `#width` and `#height` calculation, which are logically reversed
+We mostly focused on the horizontal component today, but vertical is nearly a copy-paste. Differences include:
+- in `#reposition_renderable!`, instead of repositioning children left-to-right, it will reposition them top-to-bottom
+- `#width` and `#height` calculation, which are logically reversed (compared to vertical)
 - it will have a `UI::VerticalSpacer` component, which should fill in height instead of width
 
-Since it is mostly trivial, I'll implement it off-screen. Once we have it, we can now do this:
+Since it is quite trivial, I'll implement it off-screen.
+
+Once we have it, we can now do this as a bonus:
 
 ```crystal
 # src/the_empire/mode/move_mode.cr, class TheEmpire::Mode::MoveMode
@@ -482,7 +474,7 @@ end
 ```
 
 We update the `#right_mode` for our modes. Instead of rendering the text in the middle of a box, we put it in both a vertical and horizontal, and put a spacer at the end of both.
-It will, of course, align the text to the top-left:
+It will align the text to the top-left:
 
 ![updated right menu](/the_empire_blog/docs/assets/posts/10/updated_right_menu.png)
 
