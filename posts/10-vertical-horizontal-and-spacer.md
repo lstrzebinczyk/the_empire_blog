@@ -478,4 +478,4 @@ It will align the text to the top-left:
 
 ![updated right menu](/the_empire_blog/docs/assets/posts/10/updated_right_menu.png)
 
-And that's it for today! In next one, we will be [making it look more like a map](11-making-it-look-like-a-map.html)!
+And that's it for today! In next one, we will be take a small detour and introduce the [main menu](11-main-menu.html)!
