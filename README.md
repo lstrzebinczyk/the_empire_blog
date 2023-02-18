@@ -16,4 +16,4 @@ If you wish to discuss any parts of this, I'll be hanging around [on discord](ht
 1. [Basic UI Framework](posts/9-a-basic-ui-framework.html)
 1. [Vertical, Horizontal and Spacer](posts/10-vertical-horizontal-and-spacer.html)
 1. [Main menu](posts/11-main-menu.html)
-1. [Make it look more like a map](posts/12-make-it-look-more-like-a-map.html)
+1. [Introducing the database](posts/12-introducing-the-database.html)

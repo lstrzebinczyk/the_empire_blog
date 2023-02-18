@@ -1,66 +1,18 @@
-Today we will take a small detour. At this time, the application opens directly into the map creator, and the entire codebase is organized around the map creator. I think this is not how it should be.
-I would like to have a main menu (like in games), and an option to pick between several pages. We will for sure have an option to run the simulation, but also we will need some sort of page to traverse the data we create. All of these pages need to have some sort of separation. Therefore, today we will introduce the concept of pages, and a new one: the main menu page.
+Today we will take a small detour. Currently, when the app starts, it opens map editor. The entire codebase is organized around it.
+
+That is not exactly how it should be.
+
+I envision a main menu, like games have, and several options to choose from. Map editor is one of them, but there will be others. For sure at least a separate page to run the simulation, and a different one to allow easy reviewing of data we create.
+
+We need to have an architecture that supports the idea of separate "pages". We'll try to do that today, and add the first new page: the main menu.
 
 ## Map Page
 
-But we will begin by saying this: Everything you can do in the app right now, is a map page. Or `Page::Map`. We will split our `TheEmpire` class into two.
+We will start by recognizing, that everything available right now is a map editor. Or a "map page". Or `Page::Map`. Our `TheEmpire` class actually has 2 responsibilities: managing the main loop and managing the contents and logic of map editing. We will split it into 2 classess with more focused responsibilities.
 
-First part will continue to be `TheEmpire` class, but it is now only responsible for initializing a page, and managing the main loop:
+First, we will introduce the new class: `Page::Map`. It's role is to store data related to map management and manage user input. I suppose it is similiar to `C` in the `MVC`.
 
-```crystal
-# src/the_empire.cr
-
-require "crsfml"
-
-require "./lib/**"
-require "./constants"
-require "./the_empire/**"
-require "./page/**"
-
-class TheEmpire
-  def initialize
-    @window_width = 1920
-    @window_height = 1080
-
-    @window = SF::RenderWindow.new(SF::VideoMode.new(@window_width, @window_height), "My window")
-    @window.framerate_limit = 60
-    @window.position = SF.vector2(6500, 1800)
-
-    @map_page = Page::Map.new(@window_width, @window_height, @window)
-  end
-
-  def running?
-    @window.open?
-  end
-
-  def handle_events
-    while event = @window.poll_event
-      handle_event(event)
-      @map_page.handle_event(event)
-    end
-  end
-
-  # Handle the close event specifically
-  def handle_event(event : SF::Event::Closed)
-    @window.close
-  end
-
-  def handle_event(event)
-  end
-
-  def update
-    @map_page.update
-  end
-
-  def render
-    @window.clear(SF::Color::White)
-    @map_page.render
-    @window.display
-   end
-end
-```
-
-And the second one will be `Page::Map`. We will move all the business logic we implemented about managing map to this class:
+Everything related to map management from `TheEmpire` is now moved here:
 
 ```crystal
 # src/page/map.cr
@@ -141,14 +93,75 @@ module Page
 end
 ```
 
-Easy peasy, nothing here is new. We just move the code around. We are also off-screen going to move the entire contents of `/src/the_empire` directory to `/src/page/map` and rename them accordingly.
-Whole `/src/the_empire` is about working with the map, so this is keeping in line with encapsulating this logic in the new page.
+We just moved the code around.
 
-I have to say, this is a very small change, but it makes me very happy and it makes the code seem much better organized: )
+Also I am going to move the entire contents of `/src/the_empire` directory to `/src/page/map` and rename them accordingly. So, for example, `TheEmpire::RightMenu` becomes `Page::Map::RightMenu`. That makes it clear that this entire logic is related to map page.
 
-## Menu class
+Secondly, what remains in `TheEmpire` class is now responsible for initializing of the entire application, initializing a page, and delegating all actions to the page:
 
-If we want to make a new page, it must respond to the same methods, if we want it to be a drop-in replacements. Let's try this:
+```crystal
+# src/the_empire.cr
+
+require "crsfml"
+
+require "./lib/**"
+require "./constants"
+require "./the_empire/**"
+require "./page/**"
+
+class TheEmpire
+  def initialize
+    @window_width = 1920
+    @window_height = 1080
+
+    @window = SF::RenderWindow.new(SF::VideoMode.new(@window_width, @window_height), "My window")
+    @window.framerate_limit = 60
+    @window.position = SF.vector2(6500, 1800)
+
+    # This is new. We expect it to cover map page behavior entirely, so we ask it to...
+    @map_page = Page::Map.new(@window_width, @window_height, @window)
+  end
+
+  def running?
+    @window.open?
+  end
+
+  def handle_events
+    while event = @window.poll_event
+      handle_event(event)
+      # 1: handle events
+      @map_page.handle_event(event)
+    end
+  end
+
+  def handle_event(event : SF::Event::Closed)
+    @window.close
+  end
+
+  def handle_event(event)
+  end
+
+  def update
+    # 2: update itself
+    @map_page.update
+  end
+
+  def render
+    @window.clear(SF::Color::White)
+    # 3: render to screen
+    @map_page.render
+    @window.display
+   end
+end
+```
+
+I have to say, this is a rather a small change in architecture, but it makes the code seem organized much better.
+
+Naturally, the idea is that we can have more pages. We will introduce a new one with...
+
+## Main Menu
+
+Let's try this:
 
 ```crystal
 # src/page/menu.cr
@@ -198,6 +211,8 @@ module Page
 end
 ```
 
+It's a very simple page: render 2 buttons and attach actions to them.
+
 If we do this little trick:
 
 ```crystal
@@ -217,10 +232,9 @@ Awesome! But I think I would like these buttons to be aligned to the top a littl
 ```crystal
 # src/page/menu.cr, class TheEmpire#build_ui
 
-# The spacers are new
 UI::Box.new(@bounding_rectangle) do |c|
   c.vertical(gap: 50) do |c|
-    c.spacer
+    c.spacer # <-
     c.button(
       size: {300, 80},
       text: "Map",
@@ -235,8 +249,8 @@ UI::Box.new(@bounding_rectangle) do |c|
         p "exit"
       },
     )
-    c.spacer
-    c.spacer
+    c.spacer # <-
+    c.spacer # <-
   end
 end.background(fill_color: Constants::COLOR::MENU::BACKGROUND)
 ```
@@ -245,10 +259,14 @@ Now let's check it:
 
 ![menu page with better positioning](/the_empire_blog/docs/assets/posts/11/menu_2.png)
 
-Much better! We definitely want to start our app from that page. We would like the "Map" button to change the page to map, and the "Exit" button to close the program.
-We will deal with it similarily to how we deal with the modes.
+I don't know why, but that feels better.
 
-First of all, we will actually initialize both pages and have an `@active_page`:
+We want the organization here to be like this:
+1. When app starts, we see the menu page
+2. Clicking on `Map` button opens the map page
+3. Clicking on `Exit` button closes the program.
+
+We will initialize both pages and set the menu one as active:
 
 ```crystal
 # src/page/menu.cr, class TheEmpire#initialize
@@ -258,7 +276,9 @@ First of all, we will actually initialize both pages and have an `@active_page`:
 @active_page = @menu_page
 ```
 
-And in addition to that, we will update the rest of the class to work with `@active_page`. Now, we want to be able to change pages. The problem is that this can only happen as a result of some action that happens inside of a page, but the variables that control it are in the layer above the pages. We will introduce a concept similiar to what we did in the map page. There, we have a `handle_page_event` method, which can work with `Page::Map::Event`, and in here we will have a `handle_app_event` which will be able to handle `TheEmpire::Event`. Let's see:
+The rest of this class will now work with `@active_page`. We are storing information about which page is active inside the `TheEmpire` class, but we want it to change based on a button press inside a `Page::Menu`, which is a "subcomponent" of `TheEmpire`. We already solved that problem with modes on the page map, we'll replicate that solution here.
+
+Let's introduce an app-level event:
 
 ```crystal
 # src/event.cr
@@ -293,7 +313,8 @@ def handle_app_event(event : TheEmpire::Event)
 end
 ```
 
-Should our main loop class be asked to handle an event, it will be able to. If that event is a `ChangePageEvent` with a `:map` for a `#page`, it will change the `@active_page` to `@map_page`. Easy.
+We implement a method to handle the event. Should it be calles with `TheEmpire::Event::ChangePageEvent`, it will try and change the active page.
+
 We pass that function as a proc to page objects:
 
 ```crystal
@@ -304,7 +325,7 @@ We pass that function as a proc to page objects:
 @menu_page = Page::Menu.new(@window_width, @window_height, @window, omit_event: ->handle_app_event(TheEmpire::Event))
 ```
 
-And we'll accept that event and use it in the `Page::Menu`:
+We'll accept that proc and save it in the `Page::Menu`:
 
 ```crystal
 # src/page/menu.cr, class Page::Menu
@@ -317,7 +338,7 @@ def initialize(@window_width : Int32, @window_height : Int32, @window : SF::Rend
 end
 ```
 
-And finally, we'll use it:
+And finally, we'll use it when the "Map" button is pressed.
 
 ```crystal
 # src/page/menu.cr, class Page::Menu
@@ -349,9 +370,19 @@ private def build_ui
 end
 ```
 
+Let's traverse this logic from the back.
+1. When initializing `Page` classess, we give them a proc (a function), which will accept some hardcoded events.
+1. We implement a "Please change the page" event, the `TheEmpire::Event::ChangePageEvent`
+1. When clicking on the "Map" button in main menu, we create an instance of `TheEmpire::Event::ChangePageEvent` event and call the event-processing proc with it
+1. Parent recognizes the event and updates the `@active_page` to `@map_page.
+
 And there we have it:
 
 <video width="100%" src="/the_empire_blog/docs/assets/posts/11/working_button.mp4" controls autoplay></video>
 
-It does have some issues, but it definitely works. When we press the `exit` button, we want the program to close, but that is trivial and I'll do it off-screen.
-For now, this is what we wanted. In the next one, we'll [make the map look more like a map](12-make-it-look-more-like-a-map.html)!
+Video is quite short, but it does showcase that it is working. It does have some issues, but we'll ignore them for now.
+
+Second button has quite a similiar story: we create an `TheEmpire::Event::ExitAppEvent` event, and when `#handle_app_event` receives it, the same as when we press the escape key.
+Since that is quite trivial, I'll do that off-screen.
+
+We have been playing with technical improvements for a while now, it's time to push some features. In the next one, we will be [introducing the database](12-introducing-the-database.html)!
